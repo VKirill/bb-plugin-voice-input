@@ -1,0 +1,58 @@
+{
+  "name": "bb-plugin-voice-input",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.43",
+    "bbPluginSdk": ">=0.4.87"
+  },
+  "bb": {
+    "name": "Voice Input",
+    "description": "Speech recognition on the machine that runs the BB server: Whisper or GigaAM locally, Groq, OpenAI or Google in the cloud, with a term vocabulary and text cleanup.",
+    "branding": {
+      "icon": "Mic"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": [
+      "skills"
+    ],
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "@get-bb/plugin-sdk": "0.4.87",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "better-sqlite3": "^12.0.0",
+    "typescript": "^5.7.0",
+    "@radix-ui/react-slot": "^1.3.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0",
+    "sonner": "^1.7.4"
+  },
+  "description": "Speech recognition on the machine that runs the BB server: Whisper or GigaAM locally, Groq, OpenAI or Google in the cloud, with a term vocabulary and text cleanup.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VKirill/bb-plugin-voice-input.git"
+  },
+  "homepage": "https://github.com/VKirill/bb-plugin-voice-input",
+  "keywords": [
+    "bb-plugin",
+    "voice",
+    "whisper",
+    "transcription"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "embed": "node scripts/embed-assets.mjs",
+    "build": "npm run embed && bb plugin build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts"
+  }
+}
