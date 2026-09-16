@@ -176,6 +176,25 @@ export const managementContract = defineRpcContract({
       .object({ engine: z.string(), durationMs: z.number(), rawText: z.string(), text: z.string() })
       .strict(),
   },
+  /** Прямая транскрипция аудио base64 (используется фоновой/плавающей записью интерфейса). */
+  transcribeDirect: {
+    input: z
+      .object({
+        audioBase64: z.string().min(1),
+        mimeType: z.string(),
+        filename: z.string().optional(),
+        prompt: z.string().nullable().optional(),
+        timeoutMs: z.number().int().positive().optional(),
+      })
+      .strict(),
+    output: z
+      .object({
+        ok: z.boolean(),
+        text: z.string(),
+        error: z.string().nullable(),
+      })
+      .strict(),
+  },
   historyList: {
     input: z.object({ limit: z.number().int().min(1).max(200) }).strict(),
     output: z.object({ entries: z.array(historyEntrySchema) }).strict(),

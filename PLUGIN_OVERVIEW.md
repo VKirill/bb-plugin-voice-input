@@ -3,6 +3,7 @@
 Voice messages you record in a BB chat are transcribed on the machine that runs your BB server. Each recording is saved to disk before recognition starts, so a failed transcription never loses what you said.
 
 - **Five engines.** Whisper (MLX) and GigaAM v3 run locally, so audio never leaves your machine. Groq, OpenAI and Google run in the cloud and need only an API key. Switch engines with one click.
+- **Continuous multi-tab dictation.** Recording stays active while you navigate between threads, files, or settings. An in-place waveform bar tracks your speech, and the transcript is delivered directly to the chat where recording started.
 - **A term vocabulary.** List the names you use — tools, products, people. Garbled spellings are repaired by matching consonant skeletons, so "Mail X" becomes MLX without listing every variant.
 - **An optional AI correction pass.** A language model fixes the vocabulary terms the rules missed, and nothing else. Works with any OpenAI-compatible endpoint; Groq, OpenCode Zen and OpenAI are preset.
 - **Text cleanup.** Removes fillers such as "uh" and "um" and fixes quotes and spacing, with rules for Russian, English, German, French, Spanish, Portuguese and Italian. Each rule can be turned off.

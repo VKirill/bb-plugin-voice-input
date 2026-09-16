@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
+import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
 
 type EngineId = "whisper" | "gigaam" | "openai" | "google" | "groq";
 type DiskModel = { engine: string; model: string; path: string; bytes: number; active: boolean };
@@ -796,5 +797,10 @@ export default definePluginApp((app) => {
   app.slots.settingsSection({
     id: "voice-input",
     component: VoiceInputSettings,
+  });
+
+  app.contentScripts.register({
+    id: "voice-input-interceptor",
+    mount: mountVoiceInputInterceptor,
   });
 });

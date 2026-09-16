@@ -342,7 +342,20 @@ async function runTranscription(
     rawText = response.text ?? "";
   }
 
+  // Защита от галлюцинаций Whisper при тишине на записи:
+  // если модель просто повторила подсказку словаря
+  if (hint && rawText.trim().length > 0) {
+    const normRaw = rawText.replace(/[,.\s]/g, "").toLowerCase();
+    const normHint = hint.replace(/[,.\s]/g, "").toLowerCase();
+    if (normRaw === normHint) {
+      rawText = "";
+    }
+  }
+
   const text = await postprocess(rawText, config, () => {});
+  if (!text.trim()) {
+    throw new Error("Речь не обнаружена (тишина на записи)");
+  }
   const outcome: TranscriptionOutcome = {
     engine: config.engine,
     durationMs: Date.now() - started,
@@ -361,6 +374,51 @@ async function runTranscription(
   });
   await pruneRecordings(paths, config.keepDays);
   return outcome;
+}
+
+async function executeAudioTranscription(
+  paths: HostPaths,
+  input: {
+    audioBase64: string;
+    mimeType: string;
+    filename?: string;
+    prompt?: string;
+    timeoutMs?: number;
+  },
+  tempDir: string,
+): Promise<{ ok: true; model: string; text: string } | { ok: false; code: "timeout" | "request_failed"; message: string }> {
+  const config = await readConfigWithSecrets(paths);
+  const audio = Buffer.from(input.audioBase64, "base64");
+  const extension = extensionFor(input.filename, input.mimeType);
+
+  const savedPath = config.saveRecordings
+    ? await keepRecording(paths, audio, extension)
+    : null;
+
+  let audioPath = savedPath;
+  if (!audioPath) {
+    await mkdir(tempDir, { recursive: true });
+    audioPath = join(tempDir, `${randomUUID()}${extension}`);
+    await writeFile(audioPath, audio);
+  }
+
+  try {
+    const outcome = await runTranscription(paths, config, {
+      audioPath,
+      savedPath,
+      prompt: input.prompt,
+      timeoutMs: input.timeoutMs,
+    });
+    return { ok: true as const, model: outcome.engine, text: outcome.text };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false as const,
+      code: message === "timeout" ? ("timeout" as const) : ("request_failed" as const),
+      message:
+        message === "timeout" ? "Распознавание не уложилось в отведённое время" : message,
+    };
+  }
 }
 
 export default experimental_defineHostEntry({
@@ -475,40 +533,16 @@ export default experimental_defineHostEntry({
 
     "ai.voice.transcribe": async (input, context) => {
       const paths = hostPaths(context.experimental_paths.dataDir);
-      const config = await readConfigWithSecrets(paths);
-      const audio = Buffer.from(input.audioBase64, "base64");
-      const extension = extensionFor(input.filename, input.mimeType);
+      return await executeAudioTranscription(paths, input, context.experimental_paths.tempDir);
+    },
 
-      const savedPath = config.saveRecordings
-        ? await keepRecording(paths, audio, extension)
-        : null;
-
-      // Движку нужен файл на диске: аудио живёт либо в записях, либо во
-      // временном каталоге воркера, который BB удалит вместе с процессом.
-      let audioPath = savedPath;
-      if (!audioPath) {
-        await mkdir(context.experimental_paths.tempDir, { recursive: true });
-        audioPath = join(context.experimental_paths.tempDir, `${randomUUID()}${extension}`);
-        await writeFile(audioPath, audio);
+    transcribeDirect: async (input, context) => {
+      const paths = hostPaths(context.experimental_paths.dataDir);
+      const res = await executeAudioTranscription(paths, input, context.experimental_paths.tempDir);
+      if (res.ok) {
+        return { ok: true as const, text: res.text, error: null };
       }
-
-      try {
-        const outcome = await runTranscription(paths, config, {
-          audioPath,
-          savedPath,
-          prompt: input.prompt,
-          timeoutMs: input.timeoutMs,
-        });
-        return { ok: true as const, model: outcome.engine, text: outcome.text };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false as const,
-          code: message === "timeout" ? ("timeout" as const) : ("request_failed" as const),
-          message:
-            message === "timeout" ? "Распознавание не уложилось в отведённое время" : message,
-        };
-      }
+      return { ok: false as const, text: "", error: res.message };
     },
 
     downloadModel: async ({ engine }, context) => {

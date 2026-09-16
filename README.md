@@ -1,120 +1,35 @@
-# Голосовой ввод BB (bb-plugin-voice-input)
+# BB Voice Input (`bb-plugin-voice-input`)
 
-Плагин BB, который распознаёт голосовые сообщения из чата **на машине, где
-работает сервер BB**. Это адаптация приложения [Voica](https://voica.ru/) для BB.
-Аудио не уходит в облако, а каждая запись сохраняется на диск до распознавания —
-сбой распознавания больше не уничтожает сказанное.
+A BB plugin that transcribes voice messages from chat **on the machine running your BB server**, keeping speech private and offline. Adapted from [Voica](https://voica.ru/) for BB. Audio never leaves your server unless a cloud provider is selected, and every recording is saved to disk before transcription — failed recognition never loses what you said.
 
-## Скриншоты
+## Screenshots
 
-| Движки | Словарь и ИИ-проход |
+| Engines & Speech Language | Vocabulary & AI Correction Pass |
 | --- | --- |
-| ![Движки](screenshots/engines.png) | ![Словарь](screenshots/vocabulary.png) |
-| **Облачные провайдеры и ключи** | **Записи и модели на диске** |
-| ![Облако](screenshots/cloud.png) | ![Данные](screenshots/data.png) |
+| ![Engines](screenshots/engines.png) | ![Vocabulary](screenshots/vocabulary.png) |
+| **Cloud Providers & API Keys** | **Recordings & Disk Models** |
+| ![Cloud](screenshots/cloud.png) | ![Data](screenshots/data.png) |
 
-## Возможности
+## Features
 
-- Пять движков: локальные `whisper` (mlx-whisper на Apple Silicon) и `gigaam`
-  (GigaAM v3 e2e от Сбера); облачные `groq` (whisper-large-v3-turbo, есть
-  бесплатный уровень), `openai` (gpt-4o-transcribe) и `google`
-  (gemini-3.5-transcribe).
-- Развёртывание движка на машине одной командой: `bb voice-input setup`.
-- Словарь терминов: простой список названий. Искажения перечислять не нужно —
-  их находит починка по согласному костяку слова.
-- Очистка текста: слова-паразиты и кавычки-ёлочки, каждое правило отключается.
-- Необязательный ИИ-проход по OpenAI-совместимому адресу.
-- История расшифровок и хранение записей с настраиваемым сроком.
-- Страница настроек по вкладкам: движки, диктовка, словарь, данные.
-- Загрузка моделей по кнопке с процентами, размер моделей на диске и удаление.
+- **Five speech engines:**
+  - Local `whisper` via [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) (optimized for Apple Silicon).
+  - Local `gigaam` (GigaAM v3 e2e by Sber, running on MPS/CPU).
+  - Cloud `groq` (`whisper-large-v3-turbo` with generous free limits).
+  - Cloud `openai` (`gpt-4o-transcribe`).
+  - Cloud `google` (`gemini-3.5-transcribe` via Google AI Studio).
+- **Continuous multi-tab dictation:**
+  - Recording remains active while navigating between threads, opening files, or changing settings.
+  - An in-place waveform bar with a real-time audio visualizer replaces the composer buttons during dictation.
+  - Automatically returns you to the origin thread when finished, delivering the transcript directly to the draft editor.
+- **One-command engine setup:** `bb voice-input setup` installs isolated Python venvs for local models without polluting the system.
+- **Term vocabulary:** List names and tech terms. Garbled spellings are repaired by matching consonant skeletons, so "Mail X" becomes MLX and "kladko code" becomes Claude Code without listing every phonetic error.
+- **Text cleanup:** Automatically strips filler words (e.g. "uh", "um", "ну", "э-э") and fixes typography/quotes; rules can be toggled per preference.
+- **Optional AI correction pass:** A secondary LLM pass (using any OpenAI-compatible endpoint) fixes vocabulary terms the rules missed, and nothing else.
+- **Full recording history & disk control:** Configurable retention days, one-click model downloads with live percentage progress, and disk space management.
+- **Settings page in 8 languages:** English, Russian, German, French, Spanish, Portuguese, Chinese, and Japanese.
 
-## Языки
-
-Интерфейс переведён на английский, русский, испанский, немецкий, французский,
-португальский, китайский и японский. По умолчанию — английский; язык
-переключается в шапке страницы плагина и хранится настройкой `uiLanguage`.
-
-Очистка текста зависит от языка речи: набор междометий и вид кавычек у каждого
-языка свои. Правила есть для русского, английского, немецкого, французского,
-испанского, португальского и итальянского; при «автоопределении» кириллица
-считается русским, латиница — английским. В список попали только те слова, что
-не совпадают с обычными: испанское «este» или английское «like» не трогаются.
-
-## Настройки
-
-Всё, кроме секретного ключа ИИ-прохода, живёт в собственном хранилище плагина
-и правится на его странице (Настройки → Голосовой ввод) или командой
-`bb voice-input config <ключ> <значение>`. Декларативную форму BB рисует
-списком без группировки, поэтому два десятка настроек разложены по вкладкам:
-
-- **Основные** — движок, его состояние на машине, модель Whisper, язык.
-- **Диктовка** — очистка текста: слова-паразиты, кавычки.
-- **Словарь** — термины, починка по костяку, точные правила, подсказка модели, ИИ-проход.
-- **Данные** — хранение записей, срок, размер моделей на диске, загрузка и удаление.
-
-## Облачные провайдеры
-
-На вкладке «Облако» каждый провайдер показан карточкой: модели списком, адрес
-API, ссылка на страницу, где заводится ключ, и что с бесплатными лимитами.
-
-| Провайдер | Модель | Бесплатный уровень |
-| --- | --- | --- |
-| Groq | whisper-large-v3-turbo | 2000 запросов и 8 часов аудио в сутки |
-| Google | gemini-3.5-transcribe | лимиты Google AI Studio |
-| OpenAI | gpt-4o-transcribe | нет, оплата по минутам |
-
-Для ИИ-прохода провайдер выбирается отдельно: Groq, **OpenCode Zen** (бесплатные
-текстовые модели; распознавать речь они не умеют, а править расшифровку —
-вполне) или OpenAI.
-
-## Ключи облачных движков
-
-Если установлен плагин Env Catalog, над полем ключа появляется список его ключей:
-выбранный ключ плагин берёт из каталога при сохранении и при старте, а ключ,
-введённый руками, эту привязку снимает. Без Env Catalog остаётся обычное поле.
-
-Ключ провайдера и ключ ИИ-прохода общие, когда адрес API совпадает: введённый
-в одном месте подхватывается во втором, и в интерфейсе видно, откуда он взят.
-
-Ключ можно ввести прямо в плагине (он хранится на машине распознавания в файле
-0600 и не отдаётся во фронтенд) либо взять из переменной окружения этой машины:
-`bb voice-input config groqKeyEnv GROQ_API_KEY` (так же `openaiKeyEnv`,
-`googleKeyEnv`, `aiPassKeyEnv`).
-
-Важное ограничение: переменные из **Machine environment** BB до плагина не
-доходят. Само хранилище общее — оно живёт в базе сервера, и список одинаков с
-любой машины. Но значения BB доставляет только машинам, которые создают
-плагины-провайдеры (`machineProviderId !== null`), и отдельной проверкой
-исключает машину сервера. Вручную подключённые машины их не получают.
-
-Рабочие варианты: ввести ключ прямо в плагине, выбрать его из Env Catalog или
-добавить переменную в `~/.bb/env.json` на машине сервера — этот механизм
-прокидывается в процессы, и её видят и плагины, и чаты.
-
-## Как чинятся коверканья
-
-Два слоя, каждый отключается отдельно:
-
-1. **Подсказка распознаванию** — список терминов уходит в модель до
-   распознавания. Whisper её учитывает, GigaAM такого входа не имеет.
-2. **Починка по костяку** — слово сравнивается с термином по согласным:
-   гласные распознавание теряет, согласные держатся. «Mail X» → MLX,
-   «кладко код» → Claude Code, «Dпсик» → DeepSeek. Требования тем мягче, чем
-   надёжнее доказана порча: смешанный алфавит в одном слове доказывает сам
-   себя, чистая кириллица не доказывает ничего и требует точного совпадения
-   костяка от четырёх букв — иначе «депеша» стала бы DeepSeek.
-Что не чинится ни одним слоем — забирает необязательный ИИ-проход. Его промпт
-тоже перенесён из Voica и намеренно узкий: модель правит только термины из
-словаря и ничего больше. Широкая формулировка приводит к тому, что модель
-переписывает верные слова и теряет предлоги — проверено на живой записи.
-Ответ дополнительно чистится от блоков `<think>…</think>`: reasoning-модели
-пишут ход мысли прямо в текст.
-
-Связка «GigaAM + ИИ-проход через Groq» на живой записи: распознавание 0,4 с,
-правка около 2 с, и все названия на месте — «DeepC» → DeepSeek,
-«Оларант» → Valorant, «клод-код» → Claude Code.
-
-## Установка
+## Setup & Installation
 
 ```bash
 bb plugin install .
@@ -123,77 +38,68 @@ bb voice-input setup
 bb voice-input status
 ```
 
-Требования на машине распознавания: Python 3 и ffmpeg для Whisper и GigaAM.
-macOS на Apple Silicon для Whisper — MLX работает только там. Облачным
-движкам нужен только ключ.
+### Requirements
 
-## Какой движок выбрать
+- **Local engines (`whisper`, `gigaam`):** Python 3 and `ffmpeg` installed on the host running the BB server.
+  - `whisper` requires macOS on Apple Silicon (M1/M2/M3/M4).
+- **Cloud engines (`groq`, `openai`, `google`):** Only require an API key entered in plugin settings or via environment variable.
 
-Замеры на Mac mini M4, русская речь, тёплый прогон (модель уже в памяти):
+## Cloud Providers & Keys
 
-| | 11 с речи | 67 с речи | Термины и латиница | Чистый русский |
+Cloud providers can be configured directly in the plugin settings UI (Settings → Voice Input → Cloud) or via CLI:
+
+| Provider | Model | Free Tier |
+| --- | --- | --- |
+| Groq | `whisper-large-v3-turbo` | 2,000 requests & 8 hours of audio per day |
+| Google | `gemini-3.5-transcribe` | Standard Google AI Studio rate limits |
+| OpenAI | `gpt-4o-transcribe` | Paid per-minute billing |
+
+If the [Env Catalog](https://github.com/VKirill/bb-plugin-env-catalog) plugin is installed, API keys can be selected directly from the catalog. Keys entered manually are stored in a secure `0600` file on the server and are never returned to the frontend.
+
+## How Vocabulary Repair Works
+
+Two layers of protection ensure technical terms and proper nouns are transcribed correctly:
+
+1. **Model Recognition Prompt:** The term list is passed into Whisper prior to transcription as an initial prompt context.
+2. **Consonant Skeleton Matching:** Spoken words are compared against vocabulary terms by consonants: vowels are frequently dropped or altered by ASR engines, but consonant skeletons stay intact ("Mail X" → MLX, "Dпсик" → DeepSeek).
+3. **AI Correction Pass (Optional):** Anything missed by deterministic rules is processed by a targeted LLM prompt that corrects only vocabulary terms and preserves surrounding sentence structure.
+
+## Engine Benchmarks
+
+Measured on Mac mini M4, Russian speech, warm run (model preloaded in memory):
+
+| Engine | 11s speech | 67s speech | Terms & English names | Native Russian |
 | --- | --- | --- | --- | --- |
-| `whisper` (large-v3 4-bit) | 2,5 с | 4,8 с | «Claude Code», «MLX», «MetaMCP» — верно со словарём | без «ё», числа цифрами |
-| `gigaam` (v3 e2e, MPS) | 0,6 с | ~4 с | «Visper», «Mail X», «кладко код» — коверкает | «ё», пунктуация, числа словами |
+| `whisper` (large-v3 4-bit) | 2.5s | 4.8s | Accurately matches "Claude Code", "MLX", "MetaMCP" | Digits as numbers |
+| `gigaam` (v3 e2e, MPS) | 0.6s | ~4.0s | Phonetic garbles without vocabulary repair | Native punctuation, full numbers as words |
 
-Облачные движки на той же записи: `openai` (gpt-4o-transcribe) — 2,6 с, все
-названия верно. Они ничего не устанавливают и не занимают места, но аудио
-уходит на сторону провайдера; локальные движки этого не делают.
+*Whisper large-v3 4-bit is the default model: it processes audio twice as fast as the non-quantized model and does not drop speech segments.*
 
-Вывод: для речи с англицизмами и названиями инструментов берите `whisper` —
-он держит терминологию, а словарь закрепляет её окончательно. `gigaam` быстрее
-и чище на сплошном русском без иностранных слов; его слабость с латиницей
-лечится словарём и ИИ-проходом.
+## Architecture
 
-Модели Whisper сравнивались отдельно (67 с речи, медиана трёх прогонов):
-large-v3 4-bit — 4,81 с, large-v3 — 6,40 с, turbo-q4 — 7,99 с, turbo — 10,95 с.
-Turbo при этом терял фрагменты речи, поэтому по умолчанию стоит 4-битная
-large-v3.
+- BB selects the active speech recognition service via `BB_TRANSCRIPTION` (e.g. `local-voice/default`).
+- The plugin registers the `local-voice` service in `server.ts` and implements recognition in the host daemon (`host.ts`).
+- Local engines run inside a persistent Python daemon (`python/voiced.py`) communicating over dedicated Unix sockets, keeping models warm in memory.
+- Python assets are embedded directly into the host bundle via `scripts/embed-assets.mjs` and materialized into the plugin's host data directory.
 
-## Как это устроено
-
-BB выбирает сервис транскрипции настройкой `BB_TRANSCRIPTION` вида
-`<сервис>/<модель>`. Плагин регистрирует сервис `local-voice` (`server.ts`) и
-реализует его контракт в хост-части (`host.ts`), которую BB вызывает на машине
-сервера.
-
-Whisper и GigaAM держатся тёплыми в демоне (`python/voiced.py`, unix-сокет, свой на каждый движок):
-загрузка модели стоит десятки секунд, и платить её на каждую фразу нельзя.
-Демон живёт дольше воркера плагина.
-
-Питоновские исходники встроены в бандл хоста (`scripts/embed-assets.mjs`)
-и разворачиваются в каталог данных плагина на машине: хост едет туда одним файлом.
-
-## Разработка
+## Development
 
 ```bash
-npm run embed      # обновить встроенные исходники после правки python/
-npm run typecheck
-npm test
-bb plugin build
+npm run embed      # Re-embed Python assets after editing python/
+npm run typecheck  # TypeScript validation
+npm test           # Unit tests
+npm run build      # Build server, host, and app bundles
 ```
 
-## Ограничение BB
+## Credits
 
-Штатный таймаут голосовой транскрипции в BB — 10 секунд на попытку. Длинная
-запись в него не укладывается никаким движком; ограничение лежит в сервере BB,
-а не в плагине.
+This plugin is an adaptation of [Voica](https://voica.ru/) for BB, created by Ivan Ushakov (MIT License).
+The term vocabulary repair algorithm, AI correction prompts, and text cleanup heuristics originate from Voica.
 
-## Voica
+- Website: [https://voica.ru/](https://voica.ru/)
+- Source: [https://github.com/Inhum/voica](https://github.com/Inhum/voica)
+- Author: [https://github.com/Inhum](https://github.com/Inhum)
 
-Этот плагин — адаптация [Voica](https://voica.ru/) для BB. Voica — приложение
-для диктовки на macOS, которое создал Иван Ушаков (© Ivan Ushakov, лицензия MIT).
-Из него перенесены подход и решения: словарь как простой список названий,
-починка искажённых терминов по согласному костяку слова, узкий промпт
-ИИ-исправления, отдельные выключатели правил очистки и хранение записей на диске.
-Для BB плагин переложен на его среду: сервер, машины, движки и страница настроек.
+## License
 
-Благодарим автора за открытый код и продуманные решения.
-
-- Сайт: https://voica.ru/
-- Исходники: https://github.com/Inhum/voica
-- Автор: https://github.com/Inhum
-
-## Лицензия
-
-MIT. Перенесённые части — MIT, © Ivan Ushakov.
+MIT License. Portions adapted from Voica are © Ivan Ushakov (MIT License).

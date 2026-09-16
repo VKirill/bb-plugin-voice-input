@@ -121,6 +121,19 @@ export const rpcContract = defineRpcContract({
     input: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
     output: z.object({ saved: z.boolean() }),
   },
+  transcribeAudio: {
+    input: z.object({
+      audioBase64: z.string().min(1),
+      mimeType: z.string(),
+      filename: z.string().optional(),
+      prompt: z.string().nullable().optional(),
+    }),
+    output: z.object({
+      ok: z.boolean(),
+      text: z.string(),
+      error: z.string().nullable(),
+    }),
+  },
 });
 
 export default async function plugin(bb: BbPluginApi) {
@@ -449,6 +462,24 @@ export default async function plugin(bb: BbPluginApi) {
       );
       bb.realtime.publish("state-changed", { engine });
       return result;
+    },
+    transcribeAudio: async (input) => {
+      try {
+        const hostId = await resolveHostId(bb, host, undefined);
+        return await host.call(
+          "transcribeDirect",
+          {
+            audioBase64: input.audioBase64,
+            mimeType: input.mimeType,
+            filename: input.filename,
+            prompt: input.prompt,
+            timeoutMs: TRANSCRIBE_TIMEOUT_MS,
+          },
+          { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
+        );
+      } catch (error) {
+        return { ok: false, text: "", error: describe(error) };
+      }
     },
   });
 
