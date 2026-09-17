@@ -79,7 +79,7 @@ Measured on Mac mini M4, Russian speech, warm run (model preloaded in memory):
 
 - BB selects the active speech recognition service via `BB_TRANSCRIPTION` (e.g. `local-voice/default`).
 - The plugin registers the `local-voice` service in `server.ts` and implements recognition in the host daemon (`host.ts`).
-- Local engines run inside a persistent Python daemon (`python/voiced.py`) communicating over dedicated Unix sockets, keeping models warm in memory.
+- Local engines run inside a Python daemon (`python/voiced.py`) communicating over dedicated Unix sockets. The daemon keeps the model warm between dictations and unloads it after 15 minutes of silence (`DAEMON_IDLE_SECONDS` in `host.ts`; set it to `0` to keep models resident forever). Switching the engine or the Whisper model also stops the daemon that is no longer needed, so an unused model never sits in RAM.
 - Python assets are embedded directly into the host bundle via `scripts/embed-assets.mjs` and materialized into the plugin's host data directory.
 
 ## Development

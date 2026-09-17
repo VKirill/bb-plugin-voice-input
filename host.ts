@@ -60,8 +60,16 @@ const DEFAULT_CONFIG: VoiceConfig = {
 /** Подсказка Whisper читается моделью лишь частично — держим бюджет Voica. */
 const PROMPT_BUDGET_CHARS = 800;
 const AI_PASS_TIMEOUT_MS = 30_000;
-/** 0 — демон не выходит сам: тёплая модель важнее свободной памяти. */
-const DAEMON_IDLE_SECONDS = 0;
+/**
+ * Через сколько секунд тишины демон выгружает модель и выходит. Модель весит
+ * гигабайты и на машине сервера соседствует с тредами — тёплый старт того не
+ * стоит. Следующая диктовка поднимет демон заново, первая фраза будет дольше.
+ * 0 вернёт прежнее поведение «держать вечно».
+ */
+const DAEMON_IDLE_SECONDS = 900;
+
+/** Движки с локальным демоном: только им есть что выгружать. */
+const LOCAL_ENGINES: readonly EngineId[] = ["whisper", "gigaam"];
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   "audio/webm": ".webm",
@@ -457,7 +465,19 @@ export default experimental_defineHostEntry({
     applyConfig: async ({ config }, context) => {
       const paths = hostPaths(context.experimental_paths.dataDir);
       await mkdir(paths.dataDir, { recursive: true });
+      const previous = await readFile(paths.configFile, "utf8")
+        .then((raw) => JSON.parse(raw) as Partial<VoiceConfig>)
+        .catch(() => null);
       await writeFile(paths.configFile, JSON.stringify(config, null, 2), "utf8");
+      // Сменили движок или модель Whisper — прежняя модель больше не нужна в памяти.
+      for (const engine of LOCAL_ENGINES) {
+        const stillUsed =
+          engine === config.engine &&
+          (engine !== "whisper" || previous?.whisperModel === config.whisperModel);
+        if (!stillUsed) {
+          await stopDaemon(paths, engine);
+        }
+      }
       return { applied: true as const };
     },
 
