@@ -323,7 +323,18 @@ export default async function plugin(bb: BbPluginApi) {
       for (const failure of failed) {
         bb.log.warn(`Settings not delivered — ${failure}`);
       }
-    });
+    })
+      // Цепочка уже запущена, когда плагин выгружают: clearTimeout её не
+      // остановит, и вызов bb.* упадёт на недействительной ручке. Без этого
+      // перехвата отказ становится необработанным и роняет весь сервер.
+      .catch((error) => {
+        if (isStaleContext(error)) return;
+        try {
+          bb.log.warn(`Initial settings push failed — ${describe(error)}`);
+        } catch {
+          // Контекст умер вместе с плагином — логировать уже некуда.
+        }
+      });
   }, CONFIG_PUSH_DELAY_MS);
   bb.onDispose(() => clearTimeout(initialPush));
 
@@ -740,6 +751,18 @@ function formatBytes(bytes: number): string {
     unit += 1;
   }
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+/**
+ * BB отзывает ручку API, когда плагин перезагружают или выключают. Асинхронная
+ * работа, начатая до этого, обязана завершиться молча, а не ронять сервер.
+ */
+function isStaleContext(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false;
+  const name = (error as { name?: unknown }).name;
+  if (name === "PluginContextStaleError") return true;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message.includes("stale API handle");
 }
 
 function describe(error: unknown): string {
