@@ -150,7 +150,28 @@ export class GlobalVoiceSession {
     return this.analyser;
   };
 
+  private isResumingAudio = false;
+
+  public resumeAudioContext = (): void => {
+    if (this.audioContext && this.audioContext.state === "suspended" && !this.isResumingAudio) {
+      this.isResumingAudio = true;
+      void this.audioContext.resume().finally(() => {
+        this.isResumingAudio = false;
+      });
+    }
+  };
+
+  public getDurationMs = (): number => {
+    if (this.startedAtMs !== null) {
+      return Date.now() - this.startedAtMs;
+    }
+    return this.snapshot.durationMs;
+  };
+
   public getAudioAmplitude = (): number => {
+    if (this.audioContext && this.audioContext.state === "suspended") {
+      this.resumeAudioContext();
+    }
     if (!this.analyser || !this.timeData) return 0.08;
     this.analyser.getByteTimeDomainData(this.timeData);
     let sumSquares = 0;
@@ -249,13 +270,30 @@ export class GlobalVoiceSession {
 
       this.timerInterval = window.setInterval(() => {
         if (this.startedAtMs !== null) {
+          let nextLevels = this.snapshot.levels;
+          if (this.analyser && this.frequencyData) {
+            this.analyser.getByteFrequencyData(this.frequencyData);
+            const binCount = this.analyser.frequencyBinCount;
+            const step = Math.floor(binCount / 5);
+            const levels: number[] = [];
+            for (let i = 0; i < 5; i++) {
+              let sum = 0;
+              let count = 0;
+              for (let j = i * step; j < (i + 1) * step && j < binCount; j++) {
+                sum += this.frequencyData[j] ?? 0;
+                count++;
+              }
+              const avg = count > 0 ? sum / count : 0;
+              levels.push(Math.min(1, Math.max(0, avg / 220)));
+            }
+            nextLevels = levels;
+          }
           this.updateSnapshot({
             durationMs: Date.now() - this.startedAtMs,
+            levels: nextLevels,
           });
         }
-      }, 100);
-
-      this.startLevelMeter();
+      }, 200);
 
       if ("wakeLock" in navigator && document.visibilityState === "visible") {
         try {
@@ -287,36 +325,6 @@ export class GlobalVoiceSession {
       toast.error(errorMsg);
       return false;
     }
-  }
-
-  private startLevelMeter() {
-    const update = () => {
-      if (this.snapshot.state !== "recording") return;
-
-      if (this.analyser && this.frequencyData) {
-        this.analyser.getByteFrequencyData(this.frequencyData);
-        const binCount = this.analyser.frequencyBinCount;
-        const step = Math.floor(binCount / 5);
-        const nextLevels: number[] = [];
-
-        for (let i = 0; i < 5; i++) {
-          let sum = 0;
-          let count = 0;
-          for (let j = i * step; j < (i + 1) * step && j < binCount; j++) {
-            sum += this.frequencyData[j] ?? 0;
-            count++;
-          }
-          const avg = count > 0 ? sum / count : 0;
-          nextLevels.push(Math.min(1, Math.max(0, avg / 220)));
-        }
-
-        this.updateSnapshot({ levels: nextLevels });
-      }
-
-      this.animationFrame = window.requestAnimationFrame(update);
-    };
-
-    this.animationFrame = window.requestAnimationFrame(update);
   }
 
   public async stopAndTranscribe(customTranscribeFn?: TranscribeFunction): Promise<void> {

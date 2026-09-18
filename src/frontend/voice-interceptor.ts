@@ -1,7 +1,7 @@
 // Контент-скрипт перехвата кнопки микрофона и управления живой панелью записи в BB.
 // 1. Перехватывает клик на микрофон, запуская глобальную сессию плагина.
 // 2. Отображает аккуратную панель записи с живой анимацией звуковой волны в поле ввода.
-// 3. Следует за пользователем при переходах между чатами без бесконечных циклов DOM.
+// 3. Следует за пользователем при переходах между чатами без бесконечных циклов DOM и просадок FPS.
 
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
 
@@ -88,14 +88,22 @@ export function resolveCurrentVoiceTarget(): VoiceTarget {
   let threadId: string | undefined;
 
   if (typeof window !== "undefined") {
-    const projectThreadMatch = /\/projects\/([^/]+)\/threads\/([^/]+)/.exec(window.location.pathname);
+    const pathname = window.location.pathname;
+    const projectThreadMatch = /\/projects\/([^/]+)\/threads\/([^/]+)/.exec(pathname);
     if (projectThreadMatch) {
       projectId = projectThreadMatch[1];
       threadId = projectThreadMatch[2];
     } else {
-      const threadMatch = /\/threads\/([^/]+)/.exec(window.location.pathname);
+      const threadMatch = /\/threads\/([^/]+)/.exec(pathname);
       if (threadMatch) {
         threadId = threadMatch[1];
+      }
+    }
+
+    if (!threadId && window.location.hash) {
+      const hashMatch = /#(thr_[a-z0-9]+)/.exec(window.location.hash);
+      if (hashMatch) {
+        threadId = hashMatch[1];
       }
     }
   }
@@ -142,9 +150,40 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let canvasElement: HTMLCanvasElement | null = null;
   let timerElement: HTMLElement | null = null;
   let badgeElement: HTMLButtonElement | null = null;
+  let badgeLabel: HTMLElement | null = null;
+  let lastBadgeVisible: boolean | null = null;
+  let lastBadgeTitle = "";
   let animationFrameId: number | null = null;
   let syncIntervalId: number | null = null;
+  let floatingTimeoutId: number | null = null;
+  let resizeObserver: ResizeObserver | null = null;
+
+  let cssWidth = 0;
+  let cssHeight = 0;
+  let dpr = 1;
+  let cachedCtx: CanvasRenderingContext2D | null = null;
+  let frameCount = 0;
   const bars: number[] = [];
+
+  const updateCanvasDimensions = () => {
+    if (!canvasElement) return;
+    dpr = window.devicePixelRatio || 1;
+    const rect = canvasElement.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    if (w > 0 && h > 0 && (w !== cssWidth || h !== cssHeight)) {
+      cssWidth = w;
+      cssHeight = h;
+      canvasElement.width = Math.round(w * dpr);
+      canvasElement.height = Math.round(h * dpr);
+      if (!cachedCtx) {
+        cachedCtx = canvasElement.getContext("2d");
+      }
+      if (cachedCtx) {
+        cachedCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+    }
+  };
 
   // Единый перехватчик событий клика/нажатия на микрофон
   const handleMicTrigger = (event: Event) => {
@@ -209,17 +248,31 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     center.style.cssText = `position:relative;display:flex;min-width:0;flex:1;align-items:center;height:28px;gap:8px;`;
 
     canvasElement = document.createElement("canvas");
-    canvasElement.style.cssText = `flex:1;height:100%;display:block;min-width:40px;`;
+    canvasElement.style.cssText = `flex:1;height:100%;display:block;min-width:40px;-webkit-mask-image:linear-gradient(to right, transparent 0%, black 48px);mask-image:linear-gradient(to right, transparent 0%, black 48px);`;
     center.appendChild(canvasElement);
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        updateCanvasDimensions();
+      });
+      resizeObserver.observe(canvasElement);
+    }
 
     timerElement = document.createElement("span");
     timerElement.style.cssText = `flex-shrink:0;font-family:monospace;font-size:12px;font-weight:600;color:var(--foreground,#27272a);`;
     center.appendChild(timerElement);
 
-    badgeElement = document.createElement("button");
-    badgeElement.type = "button";
-    badgeElement.style.cssText = `display:none;align-items:center;gap:5px;flex-shrink:0;max-width:200px;padding:3px 10px;border-radius:9999px;background:rgba(239,68,68,0.12);color:#ef4444;font-size:11px;font-weight:500;border:1px solid rgba(239,68,68,0.25);cursor:pointer;`;
-    badgeElement.onclick = (e) => {
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.id = "bb-voice-badge";
+    badge.style.cssText = `display:none;align-items:center;gap:5px;flex-shrink:0;max-width:220px;padding:3px 10px;border-radius:9999px;background:rgba(239,68,68,0.12);color:#ef4444;font-size:11px;font-weight:500;border:1px solid rgba(239,68,68,0.25);cursor:pointer;`;
+    badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+    
+    badgeLabel = document.createElement("span");
+    badgeLabel.style.cssText = `overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
+    badge.appendChild(badgeLabel);
+
+    badge.onclick = (e) => {
       e.stopPropagation();
       const snapshot = globalVoiceSession.getSnapshot();
       if (snapshot.target?.originPath) {
@@ -227,6 +280,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         window.dispatchEvent(new PopStateEvent("popstate"));
       }
     };
+    badgeElement = badge;
     center.appendChild(badgeElement);
 
     bar.appendChild(center);
@@ -247,7 +301,20 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     return bar;
   };
 
-  // Проверка и синхронизация позиции бара без вызова бесконечных циклов
+  const updateBadge = (visible: boolean, targetTitle: string) => {
+    if (!badgeElement || !badgeLabel) return;
+    if (visible !== lastBadgeVisible) {
+      badgeElement.style.display = visible ? "flex" : "none";
+      lastBadgeVisible = visible;
+    }
+    if (visible && targetTitle !== lastBadgeTitle) {
+      badgeLabel.textContent = `В чат: «${targetTitle}»`;
+      badgeElement.title = `Запись идёт для чата «${targetTitle}». Нажмите, чтобы вернуться в него.`;
+      lastBadgeTitle = targetTitle;
+    }
+  };
+
+  // Проверка и синхронизация позиции бара без вызова бесконечных циклов и reflow
   const syncBarPosition = () => {
     const snapshot = globalVoiceSession.getSnapshot();
     if (snapshot.state === "idle") {
@@ -255,8 +322,12 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         barElement.remove();
         barElement = null;
         canvasElement = null;
+        cachedCtx = null;
         timerElement = null;
         badgeElement = null;
+        badgeLabel = null;
+        lastBadgeVisible = null;
+        lastBadgeTitle = "";
       }
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -265,6 +336,14 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       if (syncIntervalId !== null) {
         clearInterval(syncIntervalId);
         syncIntervalId = null;
+      }
+      if (floatingTimeoutId !== null) {
+        clearTimeout(floatingTimeoutId);
+        floatingTimeoutId = null;
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
       }
       return;
     }
@@ -275,52 +354,61 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }
 
     const actionRow = document.querySelector<HTMLElement>("[data-promptbox-action-row]");
-    const currentPath = window.location.pathname;
+    const currentPath = window.location.pathname + window.location.hash;
     const isCurrentThread =
       snapshot.target?.kind === "thread" && snapshot.target.threadId
         ? currentPath.includes(snapshot.target.threadId)
-        : !currentPath.includes("/threads/");
+        : !currentPath.includes("/threads/") && !currentPath.includes("#thr_");
     const targetTitle = snapshot.target?.threadTitle || "Чат";
     const isTranscribing = snapshot.state === "transcribing";
 
-    // Обновляем таймер
+    // Обновляем таймер при необходимости
     if (timerElement) {
-      const nextText = isTranscribing ? "Распознавание..." : formatDuration(snapshot.durationMs);
+      const nextText = isTranscribing ? "Распознавание..." : formatDuration(globalVoiceSession.getDurationMs());
       if (timerElement.textContent !== nextText) {
         timerElement.textContent = nextText;
       }
     }
 
-    // Обновляем бейдж возврата
-    if (badgeElement) {
-      if (!isCurrentThread) {
-        if (badgeElement.style.display !== "flex") {
-          badgeElement.style.display = "flex";
-        }
-        badgeElement.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">В чат: «${targetTitle}»</span>`;
-        badgeElement.title = `Запись идёт для чата «${targetTitle}». Нажмите, чтобы вернуться в него.`;
-      } else {
-        if (badgeElement.style.display !== "none") {
-          badgeElement.style.display = "none";
-        }
-      }
-    }
+    // Обновляем бейдж возврата без layout thrashing
+    updateBadge(!isCurrentThread, targetTitle);
 
     // Размещение
     if (actionRow) {
+      if (floatingTimeoutId !== null) {
+        clearTimeout(floatingTimeoutId);
+        floatingTimeoutId = null;
+      }
       if (barElement.parentElement !== actionRow) {
         barElement.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:inherit;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:10px;box-shadow:inset 0 0 0 1px rgba(239,68,68,0.45);`;
         actionRow.appendChild(barElement);
+        updateCanvasDimensions();
       }
     } else {
-      if (barElement.parentElement !== document.body) {
-        barElement.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:99999;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:9999px;display:flex;align-items:center;justify-content:space-between;padding:4px 14px;gap:10px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.3);border:1px solid rgba(239,68,68,0.4);min-width:260px;`;
-        document.body.appendChild(barElement);
+      // При смене треда React может кратковременно перемонтировать actionRow.
+      // Не прыгаем сразу в document.body, чтобы избежать мерцания и ресайза канваса.
+      if (barElement.parentElement !== document.body && floatingTimeoutId === null) {
+        floatingTimeoutId = window.setTimeout(() => {
+          floatingTimeoutId = null;
+          if (globalVoiceSession.getSnapshot().state === "idle") return;
+          const freshActionRow = document.querySelector<HTMLElement>("[data-promptbox-action-row]");
+          if (freshActionRow && barElement) {
+            if (barElement.parentElement !== freshActionRow) {
+              barElement.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:inherit;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:10px;box-shadow:inset 0 0 0 1px rgba(239,68,68,0.45);`;
+              freshActionRow.appendChild(barElement);
+              updateCanvasDimensions();
+            }
+          } else if (barElement && barElement.parentElement !== document.body) {
+            barElement.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:99999;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:9999px;display:flex;align-items:center;justify-content:space-between;padding:4px 14px;gap:10px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.3);border:1px solid rgba(239,68,68,0.4);min-width:260px;`;
+            document.body.appendChild(barElement);
+            updateCanvasDimensions();
+          }
+        }, 180);
       }
     }
   };
 
-  // Анимация волны на Canvas
+  // Анимация волны на Canvas с нулевым forced reflow
   const startCanvasWaveform = () => {
     if (animationFrameId !== null) return;
 
@@ -331,52 +419,48 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         return;
       }
 
-      if (canvasElement) {
-        const ctx = canvasElement.getContext("2d");
-        const rect = canvasElement.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        const w = rect.width;
-        const h = rect.height;
-
-        if (w > 0 && h > 0 && ctx) {
-          if (canvasElement.width !== Math.round(w * dpr) || canvasElement.height !== Math.round(h * dpr)) {
-            canvasElement.width = Math.round(w * dpr);
-            canvasElement.height = Math.round(h * dpr);
+      if (canvasElement && cssWidth > 0 && cssHeight > 0) {
+        if (!cachedCtx) {
+          cachedCtx = canvasElement.getContext("2d");
+        }
+        if (cachedCtx) {
+          frameCount++;
+          // Сэмплируем амплитуду каждые 2 кадра (30 FPS) для равномерного спокойного движения
+          if (frameCount % 2 === 0) {
+            const amp = snapshot.state === "recording" ? globalVoiceSession.getAudioAmplitude() : 0.05;
+            bars.push(amp);
+            if (bars.length > 500) {
+              bars.shift();
+            }
           }
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          ctx.clearRect(0, 0, w, h);
 
-          const barCount = Math.max(1, Math.floor(w / BAR_PITCH));
-          const amp = snapshot.state === "recording" ? globalVoiceSession.getAudioAmplitude() : 0.05;
-          bars.push(amp);
-          if (bars.length > barCount) bars.shift();
+          cachedCtx.clearRect(0, 0, cssWidth, cssHeight);
 
-          const midY = h / 2;
-          const maxHalf = Math.max(0, (h * 0.85 - BAR_WIDTH) / 2);
-          const edgeFade = w * 0.15;
+          const barCount = Math.max(1, Math.floor(cssWidth / BAR_PITCH));
+          const midY = cssHeight / 2;
+          const maxHalf = Math.max(0, (cssHeight * 0.85 - BAR_WIDTH) / 2);
 
-          ctx.lineCap = "round";
-          ctx.lineWidth = BAR_WIDTH;
-          ctx.strokeStyle = "#ef4444";
+          cachedCtx.lineCap = "round";
+          cachedCtx.lineWidth = BAR_WIDTH;
+          cachedCtx.strokeStyle = "#ef4444";
+          cachedCtx.beginPath();
 
-          for (let i = 0; i < bars.length; i++) {
+          const visibleCount = Math.min(bars.length, barCount);
+          for (let i = 0; i < visibleCount; i++) {
             const barAmp = bars[bars.length - 1 - i] ?? 0;
-            const cx = w - BAR_WIDTH / 2 - i * BAR_PITCH;
+            const cx = cssWidth - BAR_WIDTH / 2 - i * BAR_PITCH;
             if (cx + BAR_WIDTH < 0) break;
             const half = barAmp * maxHalf;
-            ctx.globalAlpha = cx < edgeFade ? Math.max(0.2, cx / edgeFade) : 1;
-            ctx.beginPath();
-            ctx.moveTo(cx, midY - half);
-            ctx.lineTo(cx, midY + half);
-            ctx.stroke();
+            cachedCtx.moveTo(cx, midY - half);
+            cachedCtx.lineTo(cx, midY + half);
           }
-          ctx.globalAlpha = 1;
+          cachedCtx.stroke();
         }
       }
 
-      // Обновление таймера раз в кадр
+      // Обновление таймера раз в кадр (меняет DOM только раз в секунду)
       if (timerElement && snapshot.state === "recording") {
-        const t = formatDuration(snapshot.durationMs);
+        const t = formatDuration(globalVoiceSession.getDurationMs());
         if (timerElement.textContent !== t) {
           timerElement.textContent = t;
         }
@@ -388,13 +472,63 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     animationFrameId = requestAnimationFrame(tick);
   };
 
+  let lastSessionState: string = "idle";
+  let lastTargetId: string = "";
+
   const onSessionChange = () => {
     const snapshot = globalVoiceSession.getSnapshot();
-    if (snapshot.state !== "idle" && syncIntervalId === null) {
-      syncIntervalId = window.setInterval(syncBarPosition, 200);
+    const targetId = `${snapshot.target?.kind}:${snapshot.target?.threadId ?? ""}:${snapshot.target?.threadTitle ?? ""}`;
+
+    // Запускаем пересчёт DOM только при смене статуса сессии или целевого чата
+    if (snapshot.state !== lastSessionState || targetId !== lastTargetId) {
+      lastSessionState = snapshot.state;
+      lastTargetId = targetId;
+
+      if (snapshot.state !== "idle") {
+        if (syncIntervalId === null) {
+          syncIntervalId = window.setInterval(syncBarPosition, 600);
+        }
+      } else {
+        if (syncIntervalId !== null) {
+          clearInterval(syncIntervalId);
+          syncIntervalId = null;
+        }
+      }
+      syncBarPosition();
     }
+  };
+
+  const onNavigation = () => {
     syncBarPosition();
   };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      globalVoiceSession.resumeAudioContext();
+      syncBarPosition();
+      updateCanvasDimensions();
+    }
+  };
+
+  window.addEventListener("popstate", onNavigation, { signal });
+  window.addEventListener("hashchange", onNavigation, { signal });
+  document.addEventListener("visibilitychange", onVisibilityChange, { signal });
+
+  const origPushState = typeof window !== "undefined" ? window.history.pushState : null;
+  const origReplaceState = typeof window !== "undefined" ? window.history.replaceState : null;
+
+  if (origPushState && origReplaceState) {
+    window.history.pushState = function (...args) {
+      const res = origPushState.apply(this, args);
+      onNavigation();
+      return res;
+    };
+    window.history.replaceState = function (...args) {
+      const res = origReplaceState.apply(this, args);
+      onNavigation();
+      return res;
+    };
+  }
 
   const unsubscribeSession = globalVoiceSession.subscribe(onSessionChange);
 
@@ -406,10 +540,26 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     document.removeEventListener("pointerdown", handleMicTrigger, { capture: true });
     document.removeEventListener("click", handleMicTrigger, { capture: true });
 
+    window.removeEventListener("popstate", onNavigation);
+    window.removeEventListener("hashchange", onNavigation);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+
+    if (origPushState && typeof window !== "undefined") {
+      window.history.pushState = origPushState;
+    }
+    if (origReplaceState && typeof window !== "undefined") {
+      window.history.replaceState = origReplaceState;
+    }
+
     unsubscribeSession();
     if (barElement) {
       barElement.remove();
       barElement = null;
+      cachedCtx = null;
+    }
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
     }
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
@@ -418,6 +568,10 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     if (syncIntervalId !== null) {
       clearInterval(syncIntervalId);
       syncIntervalId = null;
+    }
+    if (floatingTimeoutId !== null) {
+      clearTimeout(floatingTimeoutId);
+      floatingTimeoutId = null;
     }
   };
 }
