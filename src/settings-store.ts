@@ -21,6 +21,12 @@ export const storedSettingsSchema = z
   .object({
     uiLanguage: z.enum(UI_LANGUAGES),
     engine: z.enum(ENGINE_IDS),
+    /**
+     * Машина распознавания: id или имя из списка подключённых. Пусто — та, где
+     * работает сервер BB. Локальные движки есть только на macOS, поэтому при
+     * сервере на Linux машину назначают вручную.
+     */
+    machine: z.string(),
     whisperModel: z.string(),
     language: z.enum(LANGUAGES),
     vocabulary: z.string(),
@@ -55,6 +61,7 @@ export type StoredSettings = z.infer<typeof storedSettingsSchema>;
 export const DEFAULT_SETTINGS: StoredSettings = {
   uiLanguage: "en",
   engine: "whisper",
+  machine: "",
   whisperModel: DEFAULT_WHISPER_MODEL,
   language: "auto",
   vocabulary: "",

@@ -60,6 +60,20 @@ export const rpcContract = defineRpcContract({
           ready: z.boolean(),
           detail: z.string(),
           modelBytes: z.number(),
+          /** false — на выбранной машине этот движок не поднять. */
+          supported: z.boolean(),
+          /** Почему недоступен: показывается вместо кнопки установки. */
+          unsupportedReason: z.string().nullable(),
+        }),
+      ),
+      /** Выбранная машина распознавания и из чего выбирать. */
+      machineId: z.string().nullable(),
+      machines: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          platform: z.string().nullable(),
+          localEnginesPossible: z.boolean(),
         }),
       ),
       activeEngine: z.string(),
@@ -187,6 +201,7 @@ export default async function plugin(bb: BbPluginApi) {
     // Ключи в конфиг с сервера не попадают: их хранит и подставляет хост.
     return {
       engine: values.engine,
+      machine: values.machine,
       whisperModel: WHISPER_MODELS[values.whisperModel] ?? WHISPER_MODELS[DEFAULT_WHISPER_MODEL]!,
       language: values.language,
       vocabulary: values.vocabulary,
@@ -255,7 +270,7 @@ export default async function plugin(bb: BbPluginApi) {
     const names = ["openaiApiKey", "googleApiKey", "groqApiKey", "aiPassApiKey"] as const;
     let hostId: string;
     try {
-      hostId = await resolveHostId(bb, host, undefined);
+      hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
     } catch {
       return;
     }
@@ -301,7 +316,7 @@ export default async function plugin(bb: BbPluginApi) {
     if (linked.length === 0) {
       return;
     }
-    const hostId = await resolveHostId(bb, host, undefined);
+    const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
     for (const slot of linked) {
       try {
         const value = await catalogValue(values[slot.catalog]);
@@ -344,10 +359,12 @@ export default async function plugin(bb: BbPluginApi) {
     state: async () => {
       let hostId: string;
       try {
-        hostId = await resolveHostId(bb, host, undefined);
+        hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       } catch (error) {
         return {
           machine: null,
+          machineId: null,
+          machines: await listMachines(bb, host),
           error: describe(error),
           pythonPath: null,
           ffmpegPath: null,
@@ -371,13 +388,29 @@ export default async function plugin(bb: BbPluginApi) {
         host.call("secretsStatus", {}, { hostId }),
       ]);
       const values = await readSettings();
+      // Локальные движки живут только на macOS. На чужой платформе их не
+      // прячем, а помечаем — иначе непонятно, почему их нет.
+      const localOk = localEnginesPossible(identity.platform);
+      const engines = status.engines.map((item) => {
+        const localOnly = LOCAL_ONLY_ENGINES.has(item.engine);
+        const supported = localOk || !localOnly;
+        return {
+          ...item,
+          supported,
+          unsupportedReason: supported
+            ? null
+            : `Нужна macOS: на ${identity.platform ?? "этой машине"} модель не запускается. Выберите другую машину или облачный движок.`,
+        };
+      });
       return {
         machine: identity.hostname,
+        machineId: hostId,
+        machines: await listMachines(bb, host),
         error: null,
         pythonPath: status.pythonPath,
         ffmpegPath: status.ffmpegPath,
         recordings: status.recordings,
-        engines: status.engines,
+        engines,
         activeEngine: config.engine,
         settings: { ...values },
         whisperModelOptions: Object.keys(WHISPER_MODELS),
@@ -412,7 +445,7 @@ export default async function plugin(bb: BbPluginApi) {
         .catch(() => [] as string[]);
       let visible: string[] = [];
       try {
-        const hostId = await resolveHostId(bb, host, undefined);
+        const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
         visible = (await host.call("envKeys", {}, { hostId })).names;
       } catch {
         // Машина может быть недоступна — покажем хотя бы объявленные имена.
@@ -420,7 +453,7 @@ export default async function plugin(bb: BbPluginApi) {
       return { declared, visible };
     },
     setupEngine: async ({ engine }) => {
-      const hostId = await resolveHostId(bb, host, undefined);
+      const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const result = await host.call(
         "setup",
         { engine, reinstall: false },
@@ -430,11 +463,11 @@ export default async function plugin(bb: BbPluginApi) {
       return { ready: result.ready, detail: result.detail };
     },
     diskModels: async () => {
-      const hostId = await resolveHostId(bb, host, undefined);
+      const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       return await host.call("listModels", {}, { hostId, timeoutMs: 120_000 });
     },
     deleteEngineModel: async ({ engine, model }) => {
-      const hostId = await resolveHostId(bb, host, undefined);
+      const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const result = await host.call(
         "deleteModel",
         { engine, model },
@@ -445,7 +478,7 @@ export default async function plugin(bb: BbPluginApi) {
     },
     updateSettings: async (patch) => {
       // Ключ ИИ-прохода секретный: страница его не читает, но записать может.
-      const hostId = await resolveHostId(bb, host, undefined);
+      const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const settingsPatch: Record<string, unknown> = { ...patch };
       for (const slot of KEY_SLOTS) {
         const typed = patch[slot.secret];
@@ -465,7 +498,7 @@ export default async function plugin(bb: BbPluginApi) {
       return { saved: true };
     },
     downloadEngineModel: async ({ engine }) => {
-      const hostId = await resolveHostId(bb, host, undefined);
+      const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const result = await host.call(
         "downloadModel",
         { engine },
@@ -476,7 +509,7 @@ export default async function plugin(bb: BbPluginApi) {
     },
     transcribeAudio: async (input) => {
       try {
-        const hostId = await resolveHostId(bb, host, undefined);
+        const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
         return await host.call(
           "transcribeDirect",
           {
@@ -703,6 +736,47 @@ function readFlags(argv: string[]): { positional: string[]; machine?: string; re
  * распознать голос. Первая подключённая машина в списке к делу не относится,
  * поэтому хосты опрашиваются и сверяются с именем машины сервера.
  */
+/**
+ * Подключённые машины с их платформой — чтобы страница дала выбрать, где
+ * распознавать, и сразу показала, где локальные движки невозможны.
+ */
+async function listMachines(
+  bb: BbPluginApi,
+  host: { call: HostCall },
+): Promise<{ id: string; name: string; platform: string | null; localEnginesPossible: boolean }[]> {
+  let hosts: { id: string; name: string; status: string }[];
+  try {
+    hosts = await bb.sdk.hosts.list();
+  } catch {
+    return [];
+  }
+  const connected = hosts.filter((item) => item.status === "connected");
+  return await Promise.all(
+    connected.map(async (item) => {
+      let platform: string | null = null;
+      try {
+        platform = (await host.call("identify", {}, { hostId: item.id })).platform;
+      } catch {
+        // Машина отвечает не всегда — тогда платформа неизвестна.
+      }
+      return {
+        id: item.id,
+        name: item.name,
+        platform,
+        localEnginesPossible: localEnginesPossible(platform),
+      };
+    }),
+  );
+}
+
+/** Движки, которым нужна macOS: MLX и GigaAM работают на GPU Apple. */
+const LOCAL_ONLY_ENGINES = new Set(["whisper", "gigaam"]);
+
+/** Платформа хоста, как её возвращает identify: darwin, linux, win32. */
+function localEnginesPossible(platform: string | null | undefined): boolean {
+  return platform === "darwin";
+}
+
 async function resolveHostId(
   bb: BbPluginApi,
   host: { call: HostCall },

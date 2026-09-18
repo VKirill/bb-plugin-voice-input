@@ -23,7 +23,21 @@ type PageState = {
   pythonPath: string | null;
   ffmpegPath: string | null;
   recordings: number;
-  engines: { engine: string; ready: boolean; detail: string; modelBytes: number }[];
+  engines: {
+    engine: string;
+    ready: boolean;
+    detail: string;
+    modelBytes: number;
+    supported: boolean;
+    unsupportedReason: string | null;
+  }[];
+  machineId: string | null;
+  machines: {
+    id: string;
+    name: string;
+    platform: string | null;
+    localEnginesPossible: boolean;
+  }[];
   activeEngine: string;
   settings: SettingsValues;
   whisperModelOptions: string[];
@@ -442,13 +456,21 @@ function VoiceInputSettings() {
               const engine = { id, ...t.engines[id] };
               const status = state.engines.find((item) => item.engine === engine.id);
               const selected = state.activeEngine === engine.id;
+              // Движок, которого на выбранной машине не поднять, выбрать нельзя.
+              const unavailable = status ? status.supported === false : false;
               return (
                 <button
                   key={engine.id}
                   type="button"
+                  disabled={unavailable}
+                  title={status?.unsupportedReason ?? undefined}
                   onClick={() => void save({ engine: engine.id })}
                   className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
-                    selected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                    unavailable
+                      ? "cursor-not-allowed opacity-50"
+                      : selected
+                        ? "border-primary bg-primary/5"
+                        : "hover:bg-muted/50"
                   }`}
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
@@ -461,7 +483,9 @@ function VoiceInputSettings() {
                       {engineStatusLabel(status?.detail, t)}
                     </span>
                   </span>
-                  <span className="text-xs text-muted-foreground">{engine.hint}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {status?.unsupportedReason ?? engine.hint}
+                  </span>
                 </button>
               );
             })}
@@ -502,6 +526,25 @@ function VoiceInputSettings() {
               />
             </Row>
           )}
+
+          <Row
+            label="Машина распознавания"
+            hint="Где выполняется распознавание. Локальные модели работают только на macOS."
+          >
+            <Select
+              value={String(values.machine ?? "")}
+              options={[
+                { value: "", label: "Автоматически — машина сервера" },
+                ...state.machines.map((item) => ({
+                  value: item.id,
+                  label: item.localEnginesPossible
+                    ? item.name
+                    : `${item.name} — только облачные движки`,
+                })),
+              ]}
+              onChange={(next) => void save({ machine: next })}
+            />
+          </Row>
 
           <Row label={t.general.speechLanguage} hint={t.general.speechLanguageHint}>
             <Select

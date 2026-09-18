@@ -14,6 +14,12 @@ export const LANGUAGES = ["auto", "ru", "en", "de", "fr", "es", "pt", "it"] as c
 export const voiceConfigSchema = z
   .object({
     engine: z.enum(ENGINE_IDS),
+    /**
+     * Машина, на которой идёт распознавание. Пусто — та, где работает
+     * сервер BB. Локальные движки живут только на macOS, поэтому машину
+     * бывает нужно назначить вручную.
+     */
+    machine: z.string(),
     /** Репозиторий модели для Whisper; GigaAM берёт свою. */
     whisperModel: z.string().min(1),
     language: z.enum(LANGUAGES),
@@ -61,6 +67,8 @@ export const engineStatusSchema = z
     engine: z.enum(ENGINE_IDS),
     ready: z.boolean(),
     detail: z.string(),
+    /** false — движок не запустится на выбранной машине (проставляет сервер). */
+    supported: z.boolean().optional(),
     /** Сколько занимает скачанная модель. 0 — модели ещё нет. */
     modelBytes: z.number(),
   })
