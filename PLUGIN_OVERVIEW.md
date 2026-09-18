@@ -1,7 +1,8 @@
 ## What you get
 
-Voice messages you record in a BB chat are transcribed on the machine that runs your BB server. Each recording is saved to disk before recognition starts, so a failed transcription never loses what you said.
+Voice messages you record in a BB chat are transcribed on a machine you choose, which need not be the one running your BB server. Each recording is saved to disk before recognition starts, so a failed transcription never loses what you said.
 
+- **Pick the machine.** Recognition runs where you point it: the Mac with the models, or any connected machine when the cloud engines are enough.
 - **Five engines.** Whisper (MLX) and GigaAM v3 run locally, so audio never leaves your machine. Groq, OpenAI and Google run in the cloud and need only an API key. Switch engines with one click.
 - **Continuous multi-tab dictation.** Recording stays active while you navigate between threads, files, or settings. An in-place waveform bar tracks your speech, and the transcript is delivered directly to the chat where recording started.
 - **A term vocabulary.** List the names you use — tools, products, people. Garbled spellings are repaired by matching consonant skeletons, so "Mail X" becomes MLX without listing every variant.
@@ -23,7 +24,7 @@ Enter an API key directly in the plugin: it is stored on the recognition machine
 
 ## Requirements
 
-- Local engines need Python 3 and ffmpeg on the BB server machine. Whisper (MLX) runs only on macOS with Apple silicon; GigaAM installs PyTorch and is built for Russian speech.
+- Local engines need Python 3 and ffmpeg on the recognition machine. Whisper (MLX) runs only on macOS with Apple silicon; GigaAM installs PyTorch and is built for Russian speech. Engines a machine cannot run are shown greyed out with the reason, so a Linux server still offers the cloud ones.
 - Cloud engines send audio to the provider and need your own account: Groq and Google have free tiers, OpenAI bills per minute.
 - BB allows 10 seconds per transcription attempt, so very long recordings can time out on any engine.
 
