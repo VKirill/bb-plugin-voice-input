@@ -334,7 +334,7 @@ export class GlobalVoiceSession {
 
     const currentTarget = this.snapshot.target;
     const recorder = this.mediaRecorder;
-    const duration = this.snapshot.durationMs;
+    const duration = this.getDurationMs();
 
     this.updateSnapshot({ state: "transcribing" });
 
@@ -343,11 +343,20 @@ export class GlobalVoiceSession {
         resolve();
         return;
       }
-      recorder.onstop = () => resolve();
+      let finished = false;
+      const finish = () => {
+        if (!finished) {
+          finished = true;
+          clearTimeout(safetyTimer);
+          resolve();
+        }
+      };
+      const safetyTimer = setTimeout(finish, 1500);
+      recorder.onstop = finish;
       try {
         recorder.stop();
       } catch {
-        resolve();
+        finish();
       }
     });
 
@@ -374,16 +383,23 @@ export class GlobalVoiceSession {
         customTranscribeFn ||
         this.transcribeFn ||
         (async (data) => {
-          const res = await fetch("/api/v1/plugins/voice-input/rpc/transcribeAudio", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-          });
-          const rawJson: unknown = await res.json();
-          if (rawJson && typeof rawJson === "object" && "result" in rawJson) {
-            return (rawJson as { result: { ok: boolean; text: string; error: string | null } }).result;
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 60_000);
+          try {
+            const res = await fetch("/api/v1/plugins/voice-input/rpc/transcribeAudio", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+              signal: controller.signal,
+            });
+            const rawJson: unknown = await res.json();
+            if (rawJson && typeof rawJson === "object" && "result" in rawJson) {
+              return (rawJson as { result: { ok: boolean; text: string; error: string | null } }).result;
+            }
+            return rawJson as { ok: boolean; text: string; error: string | null };
+          } finally {
+            clearTimeout(timer);
           }
-          return rawJson as { ok: boolean; text: string; error: string | null };
         });
 
       const rawResult: unknown = await fn({
@@ -419,7 +435,13 @@ export class GlobalVoiceSession {
       this.deliverTranscript(text, currentTarget);
     } catch (err) {
       this.updateSnapshot({ state: "idle", target: null });
-      toast.error(err instanceof Error ? err.message : String(err));
+      const msg =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "Таймаут распознавания речи (сервер не ответил за 60 секунд)"
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      toast.error(msg);
     }
   }
 

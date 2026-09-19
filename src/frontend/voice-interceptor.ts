@@ -18,6 +18,11 @@ export function findVoiceButton(target: EventTarget | null): HTMLElement | null 
   const button = element.closest("button");
   if (!button) return null;
 
+  // Исключаем кнопки самой плашки записи (подтвердить / отменить / бейдж)
+  if (button.closest("#bb-voice-active-bar")) {
+    return null;
+  }
+
   // Кнопка микрофона ОБЯЗАНА находиться внутри поля ввода (PromptBox)!
   // Это исключает ложные срабатывания на треды в сайдбаре, ссылки, сообщения агента и т.д.
   const inPromptBox =
@@ -144,11 +149,33 @@ const BAR_WIDTH = 3;
 const BAR_GAP = 2;
 const BAR_PITCH = BAR_WIDTH + BAR_GAP;
 
+const CHECK_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+const SPINNER_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:bb-voice-spin 0.9s linear infinite;"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>`;
+
+function ensureVoiceStyles() {
+  if (typeof document === "undefined") return;
+  if (!document.getElementById("bb-voice-style")) {
+    const style = document.createElement("style");
+    style.id = "bb-voice-style";
+    style.textContent = `
+      @keyframes bb-voice-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
 export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } = {}) {
+  ensureVoiceStyles();
+
   let lastTriggerTime = 0;
   let barElement: HTMLElement | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let timerElement: HTMLElement | null = null;
+  let confirmBtnElement: HTMLButtonElement | null = null;
+  let cancelBtnElement: HTMLButtonElement | null = null;
   let badgeElement: HTMLButtonElement | null = null;
   let badgeLabel: HTMLElement | null = null;
   let lastBadgeVisible: boolean | null = null;
@@ -157,6 +184,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let syncIntervalId: number | null = null;
   let floatingTimeoutId: number | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let promptBoxObserver: MutationObserver | null = null;
+  let observedPromptBox: HTMLElement | null = null;
 
   let cssWidth = 0;
   let cssHeight = 0;
@@ -232,14 +261,28 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
 
     // Кнопка отмены [ X ]
     const cancelBtn = document.createElement("button");
+    cancelBtn.id = "bb-voice-cancel-btn";
     cancelBtn.type = "button";
     cancelBtn.title = "Отменить запись";
-    cancelBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
-    cancelBtn.style.cssText = `display:flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:transparent;cursor:pointer;color:var(--muted-foreground,#71717a);flex-shrink:0;`;
-    cancelBtn.onclick = (e) => {
+    cancelBtn.setAttribute("aria-label", "Отменить запись");
+    cancelBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+    cancelBtn.style.cssText = `display:flex;width:34px;height:34px;min-width:34px;min-height:34px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:transparent;cursor:pointer;color:var(--muted-foreground,#71717a);flex-shrink:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;`;
+
+    let isCanceling = false;
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (isCanceling) return;
+      isCanceling = true;
+      setTimeout(() => {
+        isCanceling = false;
+      }, 800);
       globalVoiceSession.cancelRecording();
     };
+    cancelBtn.addEventListener("pointerdown", handleCancel, { capture: true });
+    cancelBtn.addEventListener("click", handleCancel, { capture: true });
+    cancelBtnElement = cancelBtn;
     bar.appendChild(cancelBtn);
 
     // Центр: волна + таймер + бейдж
@@ -265,7 +308,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     const badge = document.createElement("button");
     badge.type = "button";
     badge.id = "bb-voice-badge";
-    badge.style.cssText = `display:none;align-items:center;gap:5px;flex-shrink:0;max-width:220px;padding:3px 10px;border-radius:9999px;background:rgba(239,68,68,0.12);color:#ef4444;font-size:11px;font-weight:500;border:1px solid rgba(239,68,68,0.25);cursor:pointer;`;
+    badge.style.cssText = `display:none;align-items:center;gap:5px;flex-shrink:0;max-width:220px;padding:3px 10px;border-radius:9999px;background:rgba(239,68,68,0.12);color:#ef4444;font-size:11px;font-weight:500;border:1px solid rgba(239,68,68,0.25);cursor:pointer;touch-action:manipulation;`;
     badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
     
     badgeLabel = document.createElement("span");
@@ -290,12 +333,25 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     confirmBtn.id = "bb-voice-confirm-btn";
     confirmBtn.type = "button";
     confirmBtn.title = "Завершить запись и распознать";
-    confirmBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>`;
-    confirmBtn.style.cssText = `display:flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:#ef4444;color:#ffffff;cursor:pointer;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.3);`;
-    confirmBtn.onclick = (e) => {
+    confirmBtn.setAttribute("aria-label", "Завершить запись и распознать");
+    confirmBtn.innerHTML = CHECK_SVG;
+    confirmBtn.style.cssText = `display:flex;width:34px;height:34px;min-width:34px;min-height:34px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:#ef4444;color:#ffffff;cursor:pointer;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.3);touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;`;
+
+    let isConfirming = false;
+    const handleConfirm = (e: Event) => {
+      e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (isConfirming) return;
+      isConfirming = true;
+      setTimeout(() => {
+        isConfirming = false;
+      }, 800);
       void globalVoiceSession.stopAndTranscribe();
     };
+    confirmBtn.addEventListener("pointerdown", handleConfirm, { capture: true });
+    confirmBtn.addEventListener("click", handleConfirm, { capture: true });
+    confirmBtnElement = confirmBtn;
     bar.appendChild(confirmBtn);
 
     return bar;
@@ -314,6 +370,28 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }
   };
 
+  const updatePromptBoxObserver = () => {
+    const currentPromptBox = document.querySelector<HTMLElement>("[data-promptbox]");
+    if (currentPromptBox === observedPromptBox) return;
+
+    if (promptBoxObserver) {
+      promptBoxObserver.disconnect();
+      promptBoxObserver = null;
+      observedPromptBox = null;
+    }
+
+    if (currentPromptBox) {
+      observedPromptBox = currentPromptBox;
+      promptBoxObserver = new MutationObserver(() => {
+        syncBarPosition();
+      });
+      promptBoxObserver.observe(currentPromptBox, {
+        attributes: true,
+        attributeFilter: ["data-promptbox-compact", "class", "style"],
+      });
+    }
+  };
+
   // Проверка и синхронизация позиции бара без вызова бесконечных циклов и reflow
   const syncBarPosition = () => {
     const snapshot = globalVoiceSession.getSnapshot();
@@ -324,10 +402,23 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         canvasElement = null;
         cachedCtx = null;
         timerElement = null;
+        confirmBtnElement = null;
+        cancelBtnElement = null;
         badgeElement = null;
         badgeLabel = null;
         lastBadgeVisible = null;
         lastBadgeTitle = "";
+      }
+      if (promptBoxObserver) {
+        promptBoxObserver.disconnect();
+        promptBoxObserver = null;
+        observedPromptBox = null;
+      }
+      const actionRow = document.querySelector<HTMLElement>("[data-promptbox-action-row]");
+      if (actionRow) {
+        actionRow.style.removeProperty("left");
+        actionRow.style.removeProperty("right");
+        actionRow.style.removeProperty("width");
       }
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -348,12 +439,35 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       return;
     }
 
+    updatePromptBoxObserver();
+
     if (!barElement) {
       barElement = createBarElement();
       startCanvasWaveform();
     }
 
+    const promptBox = document.querySelector<HTMLElement>("[data-promptbox]");
+    const promptBoxMain = document.querySelector<HTMLElement>("[data-promptbox-main]");
     const actionRow = document.querySelector<HTMLElement>("[data-promptbox-action-row]");
+
+    // Проверяем, находится ли поле ввода в компактном режиме (мобильный экран или свёрнутое состояние):
+    const isCompact = Boolean(
+      promptBox?.hasAttribute("data-promptbox-compact") ||
+      document.querySelector("[data-promptbox-compact]") !== null ||
+      (actionRow && (
+        actionRow.classList.contains("gap-0") ||
+        actionRow.classList.contains("right-2") ||
+        (actionRow.parentElement && window.getComputedStyle(actionRow).position === "absolute")
+      ))
+    );
+
+    // В компактном режиме barElement ОБЯЗАН перекрывать весь PromptBox (48px плашку целиком),
+    // иначе внутри actionRow он сожмется в узкую полоску 32px справа с одной только кнопкой отмены!
+    // В развернутом режиме (десктоп / фокус) он аккуратно ложится в actionRow внизу.
+    const targetContainer = isCompact
+      ? (promptBoxMain || promptBox || actionRow)
+      : (actionRow || promptBoxMain || promptBox);
+
     const currentPath = window.location.pathname + window.location.hash;
     const isCurrentThread =
       snapshot.target?.kind === "thread" && snapshot.target.threadId
@@ -361,6 +475,25 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         : !currentPath.includes("/threads/") && !currentPath.includes("#thr_");
     const targetTitle = snapshot.target?.threadTitle || "Чат";
     const isTranscribing = snapshot.state === "transcribing";
+
+    // Обновляем состояние кнопки подтверждения / спиннера
+    if (confirmBtnElement) {
+      if (isTranscribing) {
+        confirmBtnElement.disabled = true;
+        confirmBtnElement.style.opacity = "0.75";
+        confirmBtnElement.style.cursor = "default";
+        confirmBtnElement.innerHTML = SPINNER_SVG;
+        confirmBtnElement.title = "Идёт распознавание...";
+        confirmBtnElement.setAttribute("aria-label", "Идёт распознавание...");
+      } else {
+        confirmBtnElement.disabled = false;
+        confirmBtnElement.style.opacity = "1";
+        confirmBtnElement.style.cursor = "pointer";
+        confirmBtnElement.innerHTML = CHECK_SVG;
+        confirmBtnElement.title = "Завершить запись и распознать";
+        confirmBtnElement.setAttribute("aria-label", "Завершить запись и распознать");
+      }
+    }
 
     // Обновляем таймер при необходимости
     if (timerElement) {
@@ -374,15 +507,21 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     updateBadge(!isCurrentThread, targetTitle);
 
     // Размещение
-    if (actionRow) {
+    if (targetContainer) {
       if (floatingTimeoutId !== null) {
         clearTimeout(floatingTimeoutId);
         floatingTimeoutId = null;
       }
-      if (barElement.parentElement !== actionRow) {
+      if (barElement.parentElement !== targetContainer) {
         barElement.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:inherit;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:10px;box-shadow:inset 0 0 0 1px rgba(239,68,68,0.45);`;
-        actionRow.appendChild(barElement);
+        targetContainer.appendChild(barElement);
         updateCanvasDimensions();
+      }
+      // Страховка на случай, если целевым контейнером остался actionRow в компактном виде
+      if (isCompact && actionRow && targetContainer === actionRow) {
+        actionRow.style.setProperty("left", "0", "important");
+        actionRow.style.setProperty("right", "0", "important");
+        actionRow.style.setProperty("width", "100%", "important");
       }
     } else {
       // При смене треда React может кратковременно перемонтировать actionRow.
@@ -391,11 +530,26 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         floatingTimeoutId = window.setTimeout(() => {
           floatingTimeoutId = null;
           if (globalVoiceSession.getSnapshot().state === "idle") return;
+          const freshPromptBox = document.querySelector<HTMLElement>("[data-promptbox]");
+          const freshMain = document.querySelector<HTMLElement>("[data-promptbox-main]");
           const freshActionRow = document.querySelector<HTMLElement>("[data-promptbox-action-row]");
-          if (freshActionRow && barElement) {
-            if (barElement.parentElement !== freshActionRow) {
+          const freshCompact = Boolean(
+            freshPromptBox?.hasAttribute("data-promptbox-compact") ||
+            document.querySelector("[data-promptbox-compact]") !== null ||
+            (freshActionRow && (
+              freshActionRow.classList.contains("gap-0") ||
+              freshActionRow.classList.contains("right-2") ||
+              (freshActionRow.parentElement && window.getComputedStyle(freshActionRow).position === "absolute")
+            ))
+          );
+          const freshTarget = freshCompact
+            ? (freshMain || freshPromptBox || freshActionRow)
+            : (freshActionRow || freshMain || freshPromptBox);
+
+          if (freshTarget && barElement) {
+            if (barElement.parentElement !== freshTarget) {
               barElement.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--card,#ffffff);color:var(--card-foreground,#09090b);border-radius:inherit;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:10px;box-shadow:inset 0 0 0 1px rgba(239,68,68,0.45);`;
-              freshActionRow.appendChild(barElement);
+              freshTarget.appendChild(barElement);
               updateCanvasDimensions();
             }
           } else if (barElement && barElement.parentElement !== document.body) {
@@ -552,6 +706,11 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }
 
     unsubscribeSession();
+    if (promptBoxObserver) {
+      promptBoxObserver.disconnect();
+      promptBoxObserver = null;
+      observedPromptBox = null;
+    }
     if (barElement) {
       barElement.remove();
       barElement = null;

@@ -125,4 +125,13 @@ test("findVoiceButton распознаёт кнопки микрофона вн�
   const sidebarThreadButton = new MockElement("button");
   sidebarThreadButton.setAttribute("aria-label", "Open thread: Аудио прерывается при смене вкладки");
   assert.equal(findVoiceButton(sidebarThreadButton as unknown as EventTarget), null);
+
+  // Кнопка подтверждения внутри bb-voice-active-bar (не должна распознаваться как триггер записи!)
+  const activeBar = new MockElement("div");
+  activeBar.setAttribute("id", "bb-voice-active-bar");
+  activeBar.parentElement = promptBox;
+  const confirmBtn = new MockElement("button");
+  confirmBtn.setAttribute("id", "bb-voice-confirm-btn");
+  confirmBtn.parentElement = activeBar;
+  assert.equal(findVoiceButton(confirmBtn as unknown as EventTarget), null);
 });
