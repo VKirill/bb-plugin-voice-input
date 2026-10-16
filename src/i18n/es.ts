@@ -33,6 +33,19 @@ export const es: Dictionary = {
     fillersHint: "Una palabra real alargada no se borra, se endereza.",
     quotes: "Arreglar comillas y espacios",
     quotesHint: "Las comillas rectas pasan a tipográficas y se quitan los espacios sobrantes.",
+    hotkey: "Atajo de dictado",
+    hotkeyHint: "Mantén pulsado para grabar, suelta para parar. Un doble toque sigue hasta que pulses otra vez o la marca.",
+    hotkeyFnNote:
+      "El navegador no ve Fn / Globe en Mac, por eso no está en la lista. Por defecto: Option derecho, como Voica. Un MacBook tiene un solo Control, a la izquierda.",
+    hotkeyListen: "Pulsar una tecla",
+    hotkeyListening: "Esperando una tecla…",
+    hotkeyClear: "Apagado",
+    hotkeyPresetCustom: "Personalizada",
+    hotkeyPresetAltRight: "⌥ Option derecho",
+    hotkeyPresetAltLeft: "⌥ Option izquierdo",
+    hotkeyPresetMetaRight: "⌘ Command derecho",
+    hotkeyPresetMetaLeft: "⌘ Command izquierdo",
+    hotkeyPresetCtrl: "⌃ Control",
   },
 
   vocabulary: {

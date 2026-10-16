@@ -35,6 +35,18 @@ export type Dictionary = {
     fillersHint: string;
     quotes: string;
     quotesHint: string;
+    hotkey: string;
+    hotkeyHint: string;
+    hotkeyFnNote: string;
+    hotkeyListen: string;
+    hotkeyListening: string;
+    hotkeyClear: string;
+    hotkeyPresetCustom: string;
+    hotkeyPresetAltRight: string;
+    hotkeyPresetAltLeft: string;
+    hotkeyPresetMetaRight: string;
+    hotkeyPresetMetaLeft: string;
+    hotkeyPresetCtrl: string;
   };
 
   vocabulary: {

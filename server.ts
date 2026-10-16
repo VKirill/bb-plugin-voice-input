@@ -1,15 +1,16 @@
 // bb-plugin-voice-input — голосовой ввод BB, который распознаёт речь на машине
 // сервера, а не в облаке.
 //
-// BB выбирает движок транскрипции настройкой BB_TRANSCRIPTION вида
-// <serviceId>/<model>. Плагин регистрирует сервис «local-voice» и реализует
-// его в host.ts; здесь живут настройки, CLI и доставка настроек на машины.
+// BB выбирает голосовой сервис в Settings → AI services (задача voice).
+// Плагин регистрирует сервис «local-voice» с transcribe() и реализует
+// распознавание в host.ts; здесь живут настройки, CLI и доставка на машины.
 import { type BbPluginApi } from "@get-bb/plugin-sdk";
 import { readFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { registerCompatibleAiService } from "./src/ai-service-compat.js";
 import {
   AI_SERVICE_ID,
   ENGINE_IDS,
@@ -151,12 +152,6 @@ export const rpcContract = defineRpcContract({
 });
 
 export default async function plugin(bb: BbPluginApi) {
-  bb.experimental_aiServices.register({
-    id: AI_SERVICE_ID,
-    displayName: "Voice input on the BB machine",
-    kinds: ["voice"],
-  });
-
   // Настроек-дескрипторов у плагина нет намеренно: BB рисует их отдельной
   // формой над страницей, скрыть её нечем, и пользователь видит настройки в
   // двух местах сразу. Обычные настройки живут в хранилище плагина, ключи — на
@@ -509,23 +504,58 @@ export default async function plugin(bb: BbPluginApi) {
     },
     transcribeAudio: async (input) => {
       try {
-        const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
-        return await host.call(
-          "transcribeDirect",
-          {
-            audioBase64: input.audioBase64,
-            mimeType: input.mimeType,
-            filename: input.filename,
-            prompt: input.prompt,
-            timeoutMs: TRANSCRIBE_TIMEOUT_MS,
-          },
-          { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
-        );
+        return await transcribeFromAudio(input);
       } catch (error) {
         return { ok: false, text: "", error: describe(error) };
       }
     },
   });
+
+  async function transcribeFromAudio(input: {
+    audioBase64: string;
+    mimeType: string;
+    filename?: string;
+    prompt?: string | null;
+  }) {
+    const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
+    return await host.call(
+      "transcribeDirect",
+      {
+        audioBase64: input.audioBase64,
+        mimeType: input.mimeType,
+        filename: input.filename,
+        prompt: input.prompt,
+        timeoutMs: TRANSCRIBE_TIMEOUT_MS,
+      },
+      { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
+    );
+  }
+
+  registerCompatibleAiService(
+    (declaration) =>
+      bb.experimental_aiServices.register(
+        declaration as unknown as Parameters<
+          BbPluginApi["experimental_aiServices"]["register"]
+        >[0],
+      ),
+    {
+      id: AI_SERVICE_ID,
+      displayName: "Voice input on the BB machine",
+      transcribe: async (audio, { hint }) => {
+        const bytes = Buffer.from(await audio.arrayBuffer());
+        const result = await transcribeFromAudio({
+          audioBase64: bytes.toString("base64"),
+          mimeType: audio.type || "application/octet-stream",
+          filename: audio.name || "recording.webm",
+          prompt: hint,
+        });
+        if (!result.ok) {
+          throw new Error(result.error ?? "Transcription failed");
+        }
+        return result.text;
+      },
+    },
+  );
 
   bb.cli.register({
     name: "voice-input",
@@ -795,19 +825,24 @@ async function resolveHostId(
     throw new Error("No connected machines.");
   }
   const serverHostname = hostname();
+  const identified: { id: string; hostname: string; platform: string }[] = [];
   for (const item of connected) {
     try {
       const identity = await host.call("identify", {}, { hostId: item.id });
-      if (identity.hostname === serverHostname) {
-        return item.id;
-      }
+      identified.push({ id: item.id, ...identity });
     } catch {
       // Машина может быть занята или несовместима — проверяем следующую.
     }
   }
-  throw new Error(
-    "Could not tell which machine runs the BB server. Name it explicitly: --machine <name>.",
-  );
+  const sameHost = identified.find((item) => item.hostname === serverHostname);
+  if (sameHost) {
+    return sameHost.id;
+  }
+  const mac = identified.find((item) => item.platform === "darwin");
+  if (mac) {
+    return mac.id;
+  }
+  return identified[0]?.id ?? connected[0]!.id;
 }
 
 type HostCall = <Method extends "identify">(

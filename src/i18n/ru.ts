@@ -33,6 +33,19 @@ export const ru: Dictionary = {
     fillersHint: "Растянутое настоящее слово не удаляется, а распрямляется: «ну-у-у» → «ну».",
     quotes: "Чинить кавычки и пробелы",
     quotesHint: "Прямые кавычки становятся типографскими, лишние пробелы убираются.",
+    hotkey: "Клавиша диктовки",
+    hotkeyHint: "Удерживаете — идёт запись, отпустили — стоп. Два быстрых нажатия оставляют запись, пока не нажмёте ещё раз или галочку.",
+    hotkeyFnNote:
+      "Fn / Globe браузер на Mac не видит, поэтому в списке его нет. По умолчанию правый Option, как в Voica. Control на MacBook один, слева.",
+    hotkeyListen: "Нажать клавишу",
+    hotkeyListening: "Жду клавишу…",
+    hotkeyClear: "Выкл.",
+    hotkeyPresetCustom: "Своя",
+    hotkeyPresetAltRight: "Правый ⌥ Option",
+    hotkeyPresetAltLeft: "Левый ⌥ Option",
+    hotkeyPresetMetaRight: "Правый ⌘ Command",
+    hotkeyPresetMetaLeft: "Левый ⌘ Command",
+    hotkeyPresetCtrl: "⌃ Control",
   },
 
   vocabulary: {

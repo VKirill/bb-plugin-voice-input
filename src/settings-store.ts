@@ -53,6 +53,12 @@ export const storedSettingsSchema = z
     aiPassKeyCatalog: z.string(),
     saveRecordings: z.boolean(),
     keepDays: z.number().int().min(0).max(3650),
+    hotkeyEnabled: z.boolean(),
+    hotkeyCode: z.string(),
+    hotkeyAlt: z.boolean(),
+    hotkeyCtrl: z.boolean(),
+    hotkeyShift: z.boolean(),
+    hotkeyMeta: z.boolean(),
   })
   .strict();
 
@@ -86,9 +92,15 @@ export const DEFAULT_SETTINGS: StoredSettings = {
   aiPassModel: "",
   aiPassKeyEnv: "",
   aiPassKeyCatalog: "",
-  saveRecordings: true,
-  keepDays: 14,
-};
+    saveRecordings: true,
+    keepDays: 14,
+    hotkeyEnabled: true,
+    hotkeyCode: "AltRight",
+    hotkeyAlt: false,
+    hotkeyCtrl: false,
+    hotkeyShift: false,
+    hotkeyMeta: false,
+  };
 
 /**
  * Прочитать сохранённое, добрав недостающее умолчаниями.

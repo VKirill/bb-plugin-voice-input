@@ -31,3 +31,13 @@ test("правка из браузера отбрасывает чужие кл�
   const patch = sanitizePatch({ vocabulary: "BB", whatever: 1, keepDays: 7 });
   assert.deepEqual(patch, { vocabulary: "BB", keepDays: 7 });
 });
+
+test("клавиша диктовки сохраняется отдельно от остальных полей", () => {
+  const merged = mergeSettings({
+    ...DEFAULT_SETTINGS,
+    hotkeyCode: "MetaRight",
+    hotkeyEnabled: true,
+  });
+  assert.equal(merged.hotkeyCode, "MetaRight");
+  assert.equal(merged.vocabulary, DEFAULT_SETTINGS.vocabulary);
+});

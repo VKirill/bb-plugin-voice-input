@@ -33,6 +33,18 @@ export const ja: Dictionary = {
     fillersHint: "引き伸ばされた本来の語は削らず、元の形に戻します。",
     quotes: "引用符と空白を整える",
     quotesHint: "直線的な引用符を組版用に直し、余分な空白を取り除きます。",
+    hotkey: "音声入力のショートカット",
+    hotkeyHint: "押している間だけ録音し、離すと停止。素早く二度押しすると、もう一度押すかチェックを押すまで録音が続きます。",
+    hotkeyFnNote: "MacのブラウザはFn / Globeを見えないため、一覧にありません。初期値はVoicaと同じ右Optionです。MacBookのControlは左側のみです。",
+    hotkeyListen: "キーを押す",
+    hotkeyListening: "キー待ち…",
+    hotkeyClear: "オフ",
+    hotkeyPresetCustom: "カスタム",
+    hotkeyPresetAltRight: "右 ⌥ Option",
+    hotkeyPresetAltLeft: "左 ⌥ Option",
+    hotkeyPresetMetaRight: "右 ⌘ Command",
+    hotkeyPresetMetaLeft: "左 ⌘ Command",
+    hotkeyPresetCtrl: "⌃ Control",
   },
 
   vocabulary: {

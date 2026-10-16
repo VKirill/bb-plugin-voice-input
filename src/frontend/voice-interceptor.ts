@@ -3,7 +3,22 @@
 // 2. Отображает аккуратную панель записи с живой анимацией звуковой волны в поле ввода.
 // 3. Следует за пользователем при переходах между чатами без бесконечных циклов DOM и просадок FPS.
 
+import { rememberComposerCaretFromDocument } from "./composer-insert.ts";
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
+import {
+  HOLD_MS,
+  HOTKEY_EVENT,
+  createPttState,
+  eventMatchesHotkey,
+  hotkeyFromSettings,
+  pttKeyDown,
+  pttKeyUp,
+  pttTimerFired,
+  readPublishedHotkeyConfig,
+  shouldIgnoreTypingTarget,
+  type PttState,
+  type VoiceHotkeyConfig,
+} from "./hotkey.ts";
 
 export function findVoiceButton(target: EventTarget | null): HTMLElement | null {
   if (!target) return null;
@@ -81,7 +96,9 @@ export function findVoiceButton(target: EventTarget | null): HTMLElement | null 
 export function resolveCurrentVoiceTarget(): VoiceTarget {
   let promptContext: string | undefined;
   try {
-    const editor = document.querySelector('.tiptap.ProseMirror, textarea, [contenteditable="true"]');
+    const editor = document.querySelector(
+      '[data-promptbox] .tiptap.ProseMirror, [data-promptbox] textarea, [data-promptbox] [contenteditable="true"]',
+    );
     if (editor?.textContent) {
       promptContext = editor.textContent.slice(0, 500);
     }
@@ -227,6 +244,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     if (now - lastTriggerTime < 350) return;
     lastTriggerTime = now;
 
+    rememberComposerCaretFromDocument();
     toggleVoiceRecording();
   };
 
@@ -236,20 +254,140 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        rememberComposerCaretFromDocument();
         toggleVoiceRecording();
         return;
       }
     }
 
-    if ((event.altKey && event.code === "KeyV") || (event.ctrlKey && event.shiftKey && event.code === "KeyV")) {
-      event.preventDefault();
-      toggleVoiceRecording();
+  };
+
+  let hotkeyConfig: VoiceHotkeyConfig = readPublishedHotkeyConfig();
+  let pttState: PttState = createPttState();
+  let pttTimer: number | null = null;
+
+  const applyPttAction = (action: "start" | "stop" | "none") => {
+    if (action === "start") {
+      const snapshot = globalVoiceSession.getSnapshot();
+      if (snapshot.state === "idle") {
+        rememberComposerCaretFromDocument();
+        const target = resolveCurrentVoiceTarget();
+        void globalVoiceSession.startRecording(target);
+      }
+    } else if (action === "stop") {
+      const snapshot = globalVoiceSession.getSnapshot();
+      if (snapshot.state === "recording") {
+        rememberComposerCaretFromDocument();
+        void globalVoiceSession.stopAndTranscribe();
+      }
     }
+  };
+
+  const clearPttTimer = () => {
+    if (pttTimer !== null) {
+      window.clearTimeout(pttTimer);
+      pttTimer = null;
+    }
+  };
+
+  const armPttTimer = (delayMs: number) => {
+    clearPttTimer();
+    if (delayMs <= 0) return;
+    pttTimer = window.setTimeout(() => {
+      pttTimer = null;
+      const next = pttTimerFired(pttState, Date.now());
+      pttState = next.state;
+      applyPttAction(next.action);
+    }, delayMs);
+  };
+
+  const onHotkeyDown = (event: KeyboardEvent) => {
+    if (document.documentElement.dataset.bbVoiceHotkeyCapture === "1") return;
+    if (event.repeat) return;
+    if (!eventMatchesHotkey(event, hotkeyConfig)) return;
+    if (shouldIgnoreTypingTarget(hotkeyConfig, event.target as { closest?: (selector: string) => unknown } | null)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const next = pttKeyDown(pttState, Date.now());
+    pttState = next.state;
+    clearPttTimer();
+    applyPttAction(next.action);
+  };
+
+  const onHotkeyUp = (event: KeyboardEvent) => {
+    if (document.documentElement.dataset.bbVoiceHotkeyCapture === "1") return;
+    if (!eventMatchesHotkey(event, hotkeyConfig)) return;
+    event.preventDefault();
+    const next = pttKeyUp(pttState, Date.now());
+    pttState = next.state;
+    if (next.delayMs > 0) {
+      armPttTimer(next.delayMs);
+    } else {
+      clearPttTimer();
+      applyPttAction(next.action);
+    }
+  };
+
+  const onHotkeyConfig = (event: Event) => {
+    const detail = (event as CustomEvent<VoiceHotkeyConfig>).detail;
+    if (detail && typeof detail === "object") {
+      hotkeyConfig = detail;
+    } else {
+      hotkeyConfig = readPublishedHotkeyConfig();
+    }
+  };
+
+  const loadHotkeyFromServer = () => {
+    void fetch("/api/v1/plugins/voice-input/rpc/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "null",
+    })
+      .then((res) => res.json())
+      .then((raw: unknown) => {
+        const payload =
+          raw && typeof raw === "object" && "result" in raw
+            ? (raw as { result: { settings?: Record<string, unknown> } }).result
+            : (raw as { settings?: Record<string, unknown> });
+        if (payload?.settings) {
+          hotkeyConfig = hotkeyFromSettings(payload.settings);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const onSelectionChange = () => {
+    const snapshot = globalVoiceSession.getSnapshot();
+    if (snapshot.state !== "idle" && snapshot.target) {
+      const path = window.location.pathname;
+      const onTarget =
+        snapshot.target.kind === "thread" && snapshot.target.threadId
+          ? path.includes(snapshot.target.threadId)
+          : !path.includes("/threads/");
+      if (!onTarget) return;
+    }
+    rememberComposerCaretFromDocument();
+  };
+
+  const onWindowBlur = () => {
+    if (pttState.mode !== "holding") return;
+    const next = pttKeyUp(pttState, Date.now() + HOLD_MS);
+    pttState = next.state;
+    clearPttTimer();
+    applyPttAction(next.action === "none" ? "stop" : next.action);
   };
 
   window.addEventListener("pointerdown", handleMicTrigger, { capture: true, signal });
   window.addEventListener("click", handleMicTrigger, { capture: true, signal });
   window.addEventListener("keydown", onKeyDown, { capture: true, signal });
+  window.addEventListener("keydown", onHotkeyDown, { capture: true, signal });
+  window.addEventListener("keyup", onHotkeyUp, { capture: true, signal });
+  window.addEventListener(HOTKEY_EVENT, onHotkeyConfig, { signal });
+  window.addEventListener("blur", onWindowBlur, { signal });
+  document.addEventListener("selectionchange", onSelectionChange, { signal });
+  loadHotkeyFromServer();
 
   document.addEventListener("pointerdown", handleMicTrigger, { capture: true, signal });
   document.addEventListener("click", handleMicTrigger, { capture: true, signal });
@@ -647,6 +785,10 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
           clearInterval(syncIntervalId);
           syncIntervalId = null;
         }
+        if (pttState.mode === "latched") {
+          pttState = createPttState();
+          clearPttTimer();
+        }
       }
       syncBarPosition();
     }
@@ -690,6 +832,11 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     window.removeEventListener("pointerdown", handleMicTrigger, { capture: true });
     window.removeEventListener("click", handleMicTrigger, { capture: true });
     window.removeEventListener("keydown", onKeyDown, { capture: true });
+    window.removeEventListener("keydown", onHotkeyDown, { capture: true });
+    window.removeEventListener("keyup", onHotkeyUp, { capture: true });
+    window.removeEventListener(HOTKEY_EVENT, onHotkeyConfig);
+    window.removeEventListener("blur", onWindowBlur);
+    clearPttTimer();
 
     document.removeEventListener("pointerdown", handleMicTrigger, { capture: true });
     document.removeEventListener("click", handleMicTrigger, { capture: true });

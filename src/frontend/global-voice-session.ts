@@ -3,6 +3,14 @@
 // от смены вкладок, роутинга или размонтирования компонентов PromptBox.
 
 import { toast } from "sonner";
+import {
+  findComposerEditor,
+  getComposerPlainText,
+  getRememberedComposerCaret,
+  insertIntoDraftText,
+  insertTranscriptAtCaret,
+  resolveComposerInsertOffset,
+} from "./composer-insert.ts";
 
 export type VoiceRecordingState = "idle" | "recording" | "transcribing" | "error";
 
@@ -445,10 +453,7 @@ export class GlobalVoiceSession {
     }
   }
 
-  private deliverTranscript(text: string, target: VoiceTarget | null) {
-    if (!target) return;
-
-    // 1. Всегда записываем результат в черновик целевого чата
+  private persistDraftText(target: VoiceTarget, nextText: string) {
     const storageKeys = getDraftStorageKeys(target);
     for (const storageKey of storageKeys) {
       let draft: { text: string; attachments: unknown[]; mentions?: unknown[] } = {
@@ -460,7 +465,7 @@ export class GlobalVoiceSession {
         if (raw) draft = JSON.parse(raw);
       } catch {}
 
-      draft.text = draft.text ? `${draft.text} ${text}` : text;
+      draft.text = nextText;
 
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(draft));
@@ -472,6 +477,39 @@ export class GlobalVoiceSession {
         );
       } catch {}
     }
+  }
+
+  private persistDraftInsert(target: VoiceTarget, transcript: string, offsetHint: number | null) {
+    const storageKeys = getDraftStorageKeys(target);
+    for (const storageKey of storageKeys) {
+      let draft: { text: string; attachments: unknown[]; mentions?: unknown[] } = {
+        text: "",
+        attachments: [],
+      };
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) draft = JSON.parse(raw);
+      } catch {}
+
+      const existing = typeof draft.text === "string" ? draft.text : "";
+      const offset =
+        offsetHint === null ? existing.length : Math.max(0, Math.min(offsetHint, existing.length));
+      draft.text = insertIntoDraftText(existing, transcript, offset).text;
+
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(draft));
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: storageKey,
+            newValue: JSON.stringify(draft),
+          }),
+        );
+      } catch {}
+    }
+  }
+
+  private deliverTranscript(text: string, target: VoiceTarget | null) {
+    if (!target) return;
 
     const currentPath = window.location.pathname;
     const isCurrentlyInTarget =
@@ -479,10 +517,15 @@ export class GlobalVoiceSession {
         ? currentPath.includes(target.threadId)
         : !currentPath.includes("/threads/");
 
+    const editor = isCurrentlyInTarget ? findComposerEditor() : null;
+    const liveText = editor ? getComposerPlainText(editor) : "";
+    const offset = isCurrentlyInTarget
+      ? resolveComposerInsertOffset(liveText.length)
+      : getRememberedComposerCaret();
+
     if (!isCurrentlyInTarget) {
-      // Пользователь завершил запись, находясь в другом чате:
-      // В чужой чат текст НЕ вставляем.
-      // Автоматически возвращаем пользователя в исходный чат, как он и ожидает!
+      this.persistDraftInsert(target, text, offset);
+
       const targetName = target.threadTitle || "исходный чат";
       toast.success(`Голос распознан и перенесён в «${targetName}»`);
 
@@ -503,31 +546,19 @@ export class GlobalVoiceSession {
         }
       }
 
-      // После перехода в целевой чат проверяем редактор и вставляем текст:
       setTimeout(() => {
-        const editor = document.querySelector<HTMLElement>(
-          '.tiptap.ProseMirror, textarea, [contenteditable="true"]',
-        );
-        if (editor) {
-          editor.focus();
-          const currentContent = editor.textContent?.trim() || "";
-          if (!currentContent.includes(text)) {
-            try {
-              document.execCommand("insertText", false, text);
-            } catch {}
-          }
-        }
+        const nextEditor = findComposerEditor();
+        if (!nextEditor) return;
+        const currentContent = getComposerPlainText(nextEditor);
+        if (currentContent.includes(text)) return;
+        insertTranscriptAtCaret(nextEditor, text, resolveComposerInsertOffset(currentContent.length));
       }, 350);
     } else {
-      // Пользователь уже находится в исходном чате: вставляем прямо в редактор
-      const editor = document.querySelector<HTMLElement>(
-        '.tiptap.ProseMirror, textarea, [contenteditable="true"]',
-      );
       if (editor) {
-        editor.focus();
-        try {
-          document.execCommand("insertText", false, text);
-        } catch {}
+        const inserted = insertTranscriptAtCaret(editor, text, offset ?? liveText.length);
+        this.persistDraftText(target, inserted.text);
+      } else {
+        this.persistDraftInsert(target, text, offset);
       }
       toast.success("Речь распознана и вставлена в чат");
     }

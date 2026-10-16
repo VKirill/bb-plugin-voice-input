@@ -33,6 +33,19 @@ export const de: Dictionary = {
     fillersHint: "Ein gedehntes echtes Wort wird geglättet statt gelöscht.",
     quotes: "Anführungszeichen und Abstände korrigieren",
     quotesHint: "Gerade Anführungszeichen werden typografisch, überflüssige Leerzeichen verschwinden.",
+    hotkey: "Diktat-Tastenkürzel",
+    hotkeyHint: "Gedrückt halten zum Aufnehmen, loslassen zum Stoppen. Doppeltippen hält die Aufnahme, bis Sie erneut tippen oder das Häkchen drücken.",
+    hotkeyFnNote:
+      "Fn / Globe sieht der Browser auf dem Mac nicht, daher fehlt er in der Liste. Standard ist rechtes Option wie in Voica. Ein MacBook hat ein Control, links.",
+    hotkeyListen: "Taste drücken",
+    hotkeyListening: "Warte auf eine Taste…",
+    hotkeyClear: "Aus",
+    hotkeyPresetCustom: "Eigene",
+    hotkeyPresetAltRight: "Rechtes ⌥ Option",
+    hotkeyPresetAltLeft: "Linkes ⌥ Option",
+    hotkeyPresetMetaRight: "Rechtes ⌘ Command",
+    hotkeyPresetMetaLeft: "Linkes ⌘ Command",
+    hotkeyPresetCtrl: "⌃ Control",
   },
 
   vocabulary: {

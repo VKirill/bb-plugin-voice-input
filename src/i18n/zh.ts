@@ -33,6 +33,18 @@ export const zh: Dictionary = {
     fillersHint: "被拖长的真实词语会被还原，而不是删除。",
     quotes: "整理引号与空格",
     quotesHint: "直引号改为印刷体引号，多余空格去掉。",
+    hotkey: "听写快捷键",
+    hotkeyHint: "按住录音，松开停止。连按两次会持续录音，直到再按一次或点勾。",
+    hotkeyFnNote: "Mac 上浏览器看不到 Fn / Globe，因此不在列表中。默认与 Voica 相同：右 Option。MacBook 只有左侧 Control。",
+    hotkeyListen: "按下按键",
+    hotkeyListening: "等待按键…",
+    hotkeyClear: "关闭",
+    hotkeyPresetCustom: "自定义",
+    hotkeyPresetAltRight: "右 ⌥ Option",
+    hotkeyPresetAltLeft: "左 ⌥ Option",
+    hotkeyPresetMetaRight: "右 ⌘ Command",
+    hotkeyPresetMetaLeft: "左 ⌘ Command",
+    hotkeyPresetCtrl: "⌃ Control",
   },
 
   vocabulary: {

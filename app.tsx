@@ -13,6 +13,16 @@ import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
 import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
+import {
+  HOTKEY_PRESETS,
+  configFromKeyboardEvent,
+  formatHotkey,
+  hotkeyFromSettings,
+  hotkeySelectValue,
+  hotkeyToSettings,
+  publishHotkeyConfig,
+  type VoiceHotkeyConfig,
+} from "./src/frontend/hotkey";
 
 type EngineId = "whisper" | "gigaam" | "openai" | "google" | "groq";
 type DiskModel = { engine: string; model: string; path: string; bytes: number; active: boolean };
@@ -132,14 +142,16 @@ function Select({
   value,
   options,
   onChange,
+  className,
 }: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (next: string) => void;
+  className?: string;
 }) {
   return (
     <select
-      className="h-8 rounded-md border bg-background px-2 text-sm"
+      className={`h-8 rounded-md border bg-background px-2 text-sm ${className ?? ""}`.trim()}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
@@ -330,6 +342,92 @@ function ProviderCard({
   );
 }
 
+function HotkeySettings({
+  t,
+  config,
+  onChange,
+}: {
+  t: Dictionary;
+  config: VoiceHotkeyConfig;
+  onChange: (next: VoiceHotkeyConfig) => void;
+}) {
+  const [listening, setListening] = useState(false);
+
+  useEffect(() => {
+    if (!listening) {
+      delete document.documentElement.dataset.bbVoiceHotkeyCapture;
+      return;
+    }
+    document.documentElement.dataset.bbVoiceHotkeyCapture = "1";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        setListening(false);
+        return;
+      }
+      if (event.code === "Tab") return;
+      onChange(configFromKeyboardEvent(event));
+      setListening(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    const timer = window.setTimeout(() => setListening(false), 8000);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.clearTimeout(timer);
+      delete document.documentElement.dataset.bbVoiceHotkeyCapture;
+    };
+  }, [listening, onChange]);
+
+  const presetLabel = (id: string) => {
+    if (id === "altRight") return t.dictation.hotkeyPresetAltRight;
+    if (id === "altLeft") return t.dictation.hotkeyPresetAltLeft;
+    if (id === "metaRight") return t.dictation.hotkeyPresetMetaRight;
+    if (id === "metaLeft") return t.dictation.hotkeyPresetMetaLeft;
+    if (id === "ctrl") return t.dictation.hotkeyPresetCtrl;
+    return t.dictation.hotkeyPresetCustom;
+  };
+
+  const selectValue = hotkeySelectValue(config);
+  const options = [
+    ...HOTKEY_PRESETS.map((preset) => ({ value: preset.id, label: presetLabel(preset.id) })),
+    ...(selectValue === "custom"
+      ? [{ value: "custom", label: `${t.dictation.hotkeyPresetCustom}: ${formatHotkey(config)}` }]
+      : []),
+    { value: "off", label: t.dictation.hotkeyClear },
+  ];
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm">{t.dictation.hotkey}</span>
+        <Select
+          className="min-w-[14rem]"
+          value={selectValue}
+          options={options}
+          onChange={(next) => {
+            if (next === "off") {
+              onChange({ ...config, enabled: false, code: "" });
+              return;
+            }
+            if (next === "custom") return;
+            const preset = HOTKEY_PRESETS.find((item) => item.id === next);
+            if (preset) onChange(preset.config);
+          }}
+        />
+      </div>
+      <span className="text-xs text-muted-foreground">{t.dictation.hotkeyHint}</span>
+      <span className="text-xs text-muted-foreground">{t.dictation.hotkeyFnNote}</span>
+      <div>
+        <Button size="sm" variant={listening ? "default" : "outline"} onClick={() => setListening((open) => !open)}>
+          {listening ? t.dictation.hotkeyListening : t.dictation.hotkeyListen}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function VoiceInputSettings() {
   const rpc = useRpc<typeof rpcContract>();
   const [state, setState] = useState<PageState | null>(null);
@@ -354,6 +452,12 @@ function VoiceInputSettings() {
       toast.error(error instanceof Error ? error.message : String(error));
     }
   }, [rpc]);
+
+  useEffect(() => {
+    if (state?.settings) {
+      publishHotkeyConfig(hotkeyFromSettings(state.settings));
+    }
+  }, [state?.settings]);
 
   useEffect(() => {
     void refresh();
@@ -381,6 +485,16 @@ function VoiceInputSettings() {
     );
     try {
       await rpc.call("updateSettings", patch);
+      if (
+        "hotkeyEnabled" in patch ||
+        "hotkeyCode" in patch ||
+        "hotkeyAlt" in patch ||
+        "hotkeyCtrl" in patch ||
+        "hotkeyShift" in patch ||
+        "hotkeyMeta" in patch
+      ) {
+        publishHotkeyConfig(hotkeyFromSettings({ ...(state?.settings ?? {}), ...patch }));
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
       await refresh();
@@ -572,6 +686,11 @@ function VoiceInputSettings() {
 
       {tab === "dictation" && (
         <div className="flex flex-col gap-3">
+          <HotkeySettings
+            t={t}
+            config={hotkeyFromSettings(values)}
+            onChange={(next) => void save(hotkeyToSettings(next))}
+          />
           <Toggle
             label={t.dictation.fillers}
             hint={t.dictation.fillersHint}
