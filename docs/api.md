@@ -2,7 +2,7 @@
 title: Plugin API and commands
 type: component
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-17
 status: active
 confidence: medium
 tags: [api, rpc, cli]
@@ -10,6 +10,8 @@ sources:
   - server.ts
   - app.tsx
   - src/frontend/global-voice-session.ts
+  - python/voiced.py
+  - src/daemon.ts
   - src/contract.ts
   - src/host-contract.ts
   - host.ts
@@ -109,6 +111,12 @@ The command group and usage strings are registered at `server.ts:560-590`; argum
 - The `transcribeAudio` browser fetch is the fallback path only; normal AI service use passes through BB's AI service registration (`src/frontend/global-voice-session.ts:390-410`, `server.ts:534-558`).
 - Host methods are strict Zod RPC contracts; the plugin source defines method names and schemas, not their HTTP route implementation (`src/contract.ts:94-210`, `src/host-contract.ts:1-10`).
 - The command help lists the supported CLI forms; unrecognized commands return exit code 1 (`server.ts:560-590`, `server.ts:733-735`).
+
+### Local daemon protocol
+
+The host communicates with one Python daemon per engine over a Unix domain socket. `ensureDaemon` reuses a responding daemon; otherwise it removes the stale socket, writes embedded `.py` assets to the host Python directory, requires the engine virtual environment, starts `voiced.py` as a detached process, and polls its socket for up to 20 seconds (`src/daemon.ts:100-142`, `src/daemon.ts:32-39`). `callDaemon` writes one JSON request terminated by a newline and reads the first newline-terminated JSON response; it rejects on timeout, socket error, or invalid JSON (`src/daemon.ts:41-82`).
+
+`voiced.py` requires a socket path argument (otherwise it prints usage and exits with code 2), creates the socket parent directory, replaces any old socket path, binds and listens with backlog 8, then sets socket permissions to `0600`. Each accepted client sends one JSON request; malformed or failed requests receive an `{ ok: false, code: "request_failed", message }` response, and a shutdown response ends the accept loop (`python/voiced.py:86-104`, `python/voiced.py:119-149`). `stopDaemon` sends the shutdown operation when a socket exists, tolerates a daemon that already exited, then removes the socket path (`src/daemon.ts:144-154`).
 
 ## Failures
 

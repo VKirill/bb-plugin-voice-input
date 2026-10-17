@@ -2,9 +2,9 @@
 title: Architecture
 type: architecture
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-17
 status: active
-confidence: medium
+confidence: high
 tags: [architecture, runtime, bb-plugin]
 sources:
   - server.ts
@@ -24,6 +24,8 @@ sources:
   - python/voiced.py
   - package.json
   - scripts/embed-assets.mjs
+  - src/daemon.ts
+  - src/embedded-assets.generated.ts
 ---
 # Architecture
 
@@ -56,7 +58,7 @@ C4Container
   Rel(host, cloud, "HTTPS with audio and key")
 ```
 
-The UI is the plugin settings app registered from `package.json`; BB invokes the plugin server and host entries separately (`package.json:6-27`). The host contract combines management methods with the SDK AI-services host contract (`src/host-contract.ts:1-10`). Local Python source is embedded during build and materialized by the host (`scripts/embed-assets.mjs:1-29`, `host.ts:574-576`).
+The UI is the plugin settings app registered from `package.json`; BB invokes the plugin server and host entries separately (`package.json:6-27`). The host contract combines management methods with the SDK AI-services host contract (`src/host-contract.ts:1-10`). The build script generates `EMBEDDED_ASSETS` from Python source; the host materializes its `.py` entries beside the engine environment before starting a daemon (`scripts/embed-assets.mjs:1-29`, `src/embedded-assets.generated.ts:1-7`, `src/daemon.ts:32-39`).
 
 ## Building Blocks
 
@@ -65,6 +67,7 @@ The UI is the plugin settings app registered from `package.json`; BB invokes the
 - **Contracts and settings** — `src/contract.ts` defines engine IDs, shared configuration, and host RPC methods; `src/settings-store.ts` owns persisted settings validation and defaults (`src/contract.ts:8-210`, `src/settings-store.ts:20-103`).
 - **Browser dictation** — `src/frontend/` detects triggers, keeps recording state at page scope, and inserts text into BB drafts (`src/frontend/voice-interceptor.ts:23-49`, `src/frontend/global-voice-session.ts:105-164`, `src/frontend/composer-insert.ts:1-5`).
 - **Local engines** — `python/voiced.py` serves JSON requests over a Unix socket; `python/engines.py` implements Whisper and GigaAM (`python/voiced.py:1-9`, `python/engines.py:22-35`, `python/engines.py:225`).
+- **Daemon lifecycle** — `src/daemon.ts` pings an engine socket, removes a stale path, materializes Python assets, starts a detached worker and polls until the daemon answers. `stopDaemon` requests shutdown and removes the socket path (`src/daemon.ts:84-154`).
 - **Cloud engines** — `src/cloud.ts` calls OpenAI-compatible transcription APIs and Google Gemini APIs (`src/cloud.ts:57-90`, `src/cloud.ts:99-154`).
 
 ## Key Flows
@@ -103,7 +106,7 @@ The UI maps RPC failures to toasts and refreshes settings after failed saves (`a
 
 ### Compatibility
 
-AI-service registration tries declarations with and without the legacy `kinds` field to support the SDK variants listed in its source comment (`src/ai-service-compat.ts:1-27`).
+AI-service registration tries, in order, `kinds` plus `transcribe`, `transcribe` only, then legacy `kinds` only; it stops on the first successful registration and rethrows the final error if all attempts fail (`src/ai-service-compat.ts:1-27`).
 
 ## Related pages
 

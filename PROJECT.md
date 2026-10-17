@@ -1,6 +1,6 @@
 ---
 title: BB Voice Input — Project Facts
-updated: 2026-10-01
+updated: 2026-10-17
 sources:
   - package.json
   - README.md
@@ -16,6 +16,13 @@ sources:
   - src/frontend/global-voice-session.ts
   - python/voiced.py
   - scripts/embed-assets.mjs
+  - src/daemon.ts
+  - src/embedded-assets.generated.ts
+  - src/ai-service-compat.ts
+  - src/frontend/hotkey.ts
+  - src/frontend/composer-insert.ts
+  - src/cleanup.ts
+  - src/term-repair.ts
   - docs/architecture.md
   - docs/gotchas.md
 ---
@@ -33,7 +40,7 @@ sources:
 - Host entry: `host.ts`; handles management RPC and voice transcription (`host.ts:432-557`).
 - Settings page: `app.tsx`; uses `rpcContract` (`app.tsx:431-469`).
 - Browser dictation: `src/frontend/voice-interceptor.ts`, `src/frontend/global-voice-session.ts` (`src/frontend/voice-interceptor.ts:187-249`, `src/frontend/global-voice-session.ts:105-164`).
-- Local daemon: `python/voiced.py`; JSON-line requests over per-engine Unix sockets (`python/voiced.py:1-9`, `src/paths.ts:15-18`).
+- Local daemon: `python/voiced.py`; one JSON request and response per newline-delimited Unix socket connection (`python/voiced.py:86-104`, `python/voiced.py:119-149`). Host lifecycle and socket client: `src/daemon.ts` (`src/daemon.ts:41-83`, `src/daemon.ts:100-154`).
 
 ## Critical invariants
 
@@ -41,12 +48,14 @@ sources:
 - API key values are excluded from server-pushed config and stored on the recognition host with mode `0600` (`server.ts:194-230`, `src/secret-store.ts:36-53`).
 - Config changes stop local daemons no longer matching the selected engine/model (`host.ts:465-481`).
 - Transcription output is vocabulary-repaired, cleaned, optionally guarded after an AI pass, then recorded in JSONL history (`host.ts:192-229`, `host.ts:363-384`).
+- Browser dictation toggles between starting an idle session and stopping a recording; short hotkey presses wait for a second press before stopping (`src/frontend/voice-interceptor.ts:148-155`, `src/frontend/hotkey.ts:231-271`).
 - Details and rationale: [Architecture](docs/architecture.md), [Data model](docs/data-model.md).
 
 ## Conventions
 
 - Shared contracts and settings validation live in `src/contract.ts` and `src/settings-store.ts` (`src/contract.ts:8-210`, `src/settings-store.ts:20-143`).
-- Python assets are embedded by `scripts/embed-assets.mjs` before `bb plugin build` (`package.json:31-36`, `scripts/embed-assets.mjs:8-29`).
+- Python assets are embedded by `scripts/embed-assets.mjs` into `EMBEDDED_ASSETS`; the host writes `.py` assets before starting a daemon (`package.json:31-36`, `scripts/embed-assets.mjs:8-29`, `src/embedded-assets.generated.ts:3-8`, `src/daemon.ts:32-39`).
+- AI voice-service registration tries the declaration shapes in `src/ai-service-compat.ts` order and throws the last registration error if all fail (`src/ai-service-compat.ts:1-27`).
 - Keep API keys out of settings RPC responses; expose configured flags only (`server.ts:410-416`, `src/contract.ts:81-86`).
 - Project docs are in `docs/`; feature behavior belongs in the relevant `docs/features/` page.
 
