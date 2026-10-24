@@ -121,5 +121,9 @@ export const fr: Dictionary = {
     author: "Auteur",
   },
 
-  errors: { machineUnreachable: (reason) => `La machine de reconnaissance est injoignable : ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `La machine de reconnaissance est injoignable : ${reason}`,
+    keyRequired: (engine) => `Le moteur ${engine} nécessite une clé : Réglages → Saisie vocale → Cloud.`,
+    keyEnvMissing: (name) => `La variable ${name} n'existe pas sur la machine de reconnaissance.`,
+  },
 };

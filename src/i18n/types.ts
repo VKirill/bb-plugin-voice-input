@@ -116,5 +116,9 @@ export type Dictionary = {
     author: string;
   };
 
-  errors: { machineUnreachable: (reason: string) => string };
+  errors: {
+    machineUnreachable: (reason: string) => string;
+    keyRequired: (engine: string) => string;
+    keyEnvMissing: (name: string) => string;
+  };
 };

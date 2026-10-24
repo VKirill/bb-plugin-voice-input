@@ -120,5 +120,9 @@ export const zh: Dictionary = {
     author: "作者",
   },
 
-  errors: { machineUnreachable: (reason) => `无法连接识别机器：${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `无法连接识别机器：${reason}`,
+    keyRequired: (engine) => `${engine} 引擎需要密钥：设置 → 语音输入 → 云端。`,
+    keyEnvMissing: (name) => `识别机器上没有环境变量 ${name}。`,
+  },
 };

@@ -199,6 +199,7 @@ export default async function plugin(bb: BbPluginApi) {
       machine: values.machine,
       whisperModel: WHISPER_MODELS[values.whisperModel] ?? WHISPER_MODELS[DEFAULT_WHISPER_MODEL]!,
       language: values.language,
+      uiLanguage: values.uiLanguage,
       vocabulary: values.vocabulary,
       vocabularyRepair: values.vocabularyRepair,
       vocabularyPrompt: values.vocabularyPrompt,

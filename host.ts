@@ -28,11 +28,13 @@ import { repairTerms } from "./src/term-repair.js";
 import { runAiPass } from "./src/ai-pass.js";
 import { guardAiPass } from "./src/ai-pass-guard.js";
 import { transcribeGemini, transcribeOpenAi } from "./src/cloud.js";
+import { dictionary } from "./src/i18n/index.js";
 
 const DEFAULT_CONFIG: VoiceConfig = {
   engine: "whisper",
   whisperModel: "mlx-community/whisper-large-v3-turbo",
   language: "auto",
+  uiLanguage: "en",
   vocabulary: "",
   vocabularyRepair: true,
   vocabularyPrompt: true,
@@ -269,6 +271,7 @@ async function runTranscription(
 ): Promise<TranscriptionOutcome> {
   const started = Date.now();
   let rawText: string;
+  const words = dictionary(config.uiLanguage).errors;
 
   const entries = parseVocabulary(config.vocabulary);
   const hint = config.vocabularyPrompt
@@ -299,8 +302,8 @@ async function runTranscription(
       if (!key) {
         throw new Error(
           keyEnv
-            ? `Переменной ${keyEnv} нет на машине распознавания.`
-            : `Для движка ${groq ? "Groq" : "OpenAI"} нужен ключ: Настройки → Голосовой ввод → Облако.`,
+            ? words.keyEnvMissing(keyEnv)
+            : words.keyRequired(groq ? "Groq" : "OpenAI"),
         );
       }
       rawText = await transcribeOpenAi(
@@ -316,8 +319,8 @@ async function runTranscription(
       if (!key) {
         throw new Error(
           config.cloud.googleKeyEnv
-            ? `Переменной ${config.cloud.googleKeyEnv} нет на машине распознавания.`
-            : "Для движка Google нужен ключ: Настройки → Голосовой ввод → Облако.",
+            ? words.keyEnvMissing(config.cloud.googleKeyEnv)
+            : words.keyRequired("Google"),
         );
       }
       rawText = await transcribeGemini(

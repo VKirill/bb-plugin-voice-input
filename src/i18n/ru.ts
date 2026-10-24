@@ -121,5 +121,9 @@ export const ru: Dictionary = {
     author: "Автор",
   },
 
-  errors: { machineUnreachable: (reason) => `Машина распознавания недоступна: ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `Машина распознавания недоступна: ${reason}`,
+    keyRequired: (engine) => `Для движка ${engine} нужен ключ: Настройки → Голосовой ввод → Облако.`,
+    keyEnvMissing: (name) => `Переменной ${name} нет на машине распознавания.`,
+  },
 };

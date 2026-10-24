@@ -121,5 +121,9 @@ export const en: Dictionary = {
     author: "Author",
   },
 
-  errors: { machineUnreachable: (reason) => `The recognition machine is unreachable: ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `The recognition machine is unreachable: ${reason}`,
+    keyRequired: (engine) => `${engine} needs an API key: Voice Input settings → Cloud.`,
+    keyEnvMissing: (name) => `The variable ${name} is not set on the recognition machine.`,
+  },
 };

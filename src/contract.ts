@@ -23,6 +23,8 @@ export const voiceConfigSchema = z
     /** Репозиторий модели для Whisper; GigaAM берёт свою. */
     whisperModel: z.string().min(1),
     language: z.enum(LANGUAGES),
+    /** Язык интерфейса: на нём хост формулирует ошибки, которые видит пользователь. */
+    uiLanguage: z.string(),
     vocabulary: z.string(),
     vocabularyRepair: z.boolean(),
     vocabularyPrompt: z.boolean(),

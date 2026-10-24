@@ -121,5 +121,9 @@ export const de: Dictionary = {
     author: "Autor",
   },
 
-  errors: { machineUnreachable: (reason) => `Der Erkennungsrechner ist nicht erreichbar: ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `Der Erkennungsrechner ist nicht erreichbar: ${reason}`,
+    keyRequired: (engine) => `Für die Engine ${engine} ist ein Schlüssel nötig: Einstellungen → Spracheingabe → Cloud.`,
+    keyEnvMissing: (name) => `Die Variable ${name} existiert auf dem Erkennungsrechner nicht.`,
+  },
 };

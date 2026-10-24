@@ -121,5 +121,9 @@ export const es: Dictionary = {
     author: "Autor",
   },
 
-  errors: { machineUnreachable: (reason) => `La máquina de reconocimiento no responde: ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `La máquina de reconocimiento no responde: ${reason}`,
+    keyRequired: (engine) => `El motor ${engine} necesita una clave: Ajustes → Entrada de voz → Nube.`,
+    keyEnvMissing: (name) => `La variable ${name} no existe en la máquina de reconocimiento.`,
+  },
 };

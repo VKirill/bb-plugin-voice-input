@@ -120,5 +120,9 @@ export const ja: Dictionary = {
     author: "作者",
   },
 
-  errors: { machineUnreachable: (reason) => `認識用の端末に接続できません: ${reason}` },
+  errors: {
+    machineUnreachable: (reason) => `認識用の端末に接続できません: ${reason}`,
+    keyRequired: (engine) => `${engine} エンジンにはキーが必要です: 設定 → 音声入力 → クラウド。`,
+    keyEnvMissing: (name) => `認識用の端末に環境変数 ${name} がありません。`,
+  },
 };
