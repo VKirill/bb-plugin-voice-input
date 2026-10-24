@@ -120,5 +120,31 @@ export const zh: Dictionary = {
     author: "作者",
   },
 
+  voice: {
+    micError: "麦克风录音出错",
+    micFailed: "无法打开麦克风",
+    micDenied: "浏览器已阻止麦克风访问",
+    micNotFound: "未找到麦克风",
+    tooShort: "录音太短（不足一秒）",
+    notRecognized: "无法识别语音（录音中没有声音）",
+    timeout: "语音识别超时（服务器 60 秒内未响应）",
+    movedToChat: (name) => `语音已识别并转到“${name}”`,
+    pasted: "语音已识别并插入聊天",
+    originChat: "原聊天",
+    chat: "聊天",
+    newChat: "新聊天",
+    cancelRecording: "取消录音",
+    finishRecording: "结束录音并识别",
+    transcribing: "识别中...",
+    badgeLabel: (title) => `发送到聊天：“${title}”`,
+    badgeTitle: (title) => `正在为聊天“${title}”录音。点击返回。`,
+  },
+  machine: {
+    label: "识别机器",
+    hint: "识别运行的位置。本地模型只能在 macOS 上使用。",
+    auto: "自动：服务器所在机器",
+    cloudOnly: (name) => `${name}（仅云端引擎）`,
+  },
+
   errors: { machineUnreachable: (reason) => `无法连接识别机器：${reason}` },
 };

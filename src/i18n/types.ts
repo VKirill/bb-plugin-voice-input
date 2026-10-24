@@ -116,5 +116,27 @@ export type Dictionary = {
     author: string;
   };
 
+  /** Тосты и подписи записи в окне приложения (frontend). */
+  voice: {
+    micError: string;
+    micFailed: string;
+    micDenied: string;
+    micNotFound: string;
+    tooShort: string;
+    notRecognized: string;
+    timeout: string;
+    movedToChat: (name: string) => string;
+    pasted: string;
+    originChat: string;
+    chat: string;
+    newChat: string;
+    cancelRecording: string;
+    finishRecording: string;
+    transcribing: string;
+    badgeLabel: (title: string) => string;
+    badgeTitle: (title: string) => string;
+  };
+  machine: { label: string; hint: string; auto: string; cloudOnly: (name: string) => string };
+
   errors: { machineUnreachable: (reason: string) => string };
 };

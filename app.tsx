@@ -13,6 +13,7 @@ import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
 import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
+import { setFrontendLanguage } from "./src/frontend/words";
 import {
   HOTKEY_PRESETS,
   configFromKeyboardEvent,
@@ -525,6 +526,7 @@ function VoiceInputSettings() {
 
   const values = state.settings;
   const t = dictionary(String(values.uiLanguage ?? "en"));
+  setFrontendLanguage(String(values.uiLanguage ?? "en"));
   const vocabulary = vocabularyDraft ?? String(values.vocabulary ?? "");
   const activeEngine = state.engines.find((engine) => engine.engine === state.activeEngine);
   const progress =
@@ -642,18 +644,18 @@ function VoiceInputSettings() {
           )}
 
           <Row
-            label="Машина распознавания"
-            hint="Где выполняется распознавание. Локальные модели работают только на macOS."
+            label={t.machine.label}
+            hint={t.machine.hint}
           >
             <Select
               value={String(values.machine ?? "")}
               options={[
-                { value: "", label: "Автоматически — машина сервера" },
+                { value: "", label: t.machine.auto },
                 ...state.machines.map((item) => ({
                   value: item.id,
                   label: item.localEnginesPossible
                     ? item.name
-                    : `${item.name} — только облачные движки`,
+                    : t.machine.cloudOnly(item.name),
                 })),
               ]}
               onChange={(next) => void save({ machine: next })}

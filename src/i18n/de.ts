@@ -121,5 +121,31 @@ export const de: Dictionary = {
     author: "Autor",
   },
 
+  voice: {
+    micError: "Fehler bei der Mikrofonaufnahme",
+    micFailed: "Mikrofon konnte nicht aktiviert werden",
+    micDenied: "Der Mikrofonzugriff ist im Browser blockiert",
+    micNotFound: "Mikrofon nicht gefunden",
+    tooShort: "Aufnahme zu kurz (unter einer Sekunde)",
+    notRecognized: "Sprache konnte nicht erkannt werden (Stille in der Aufnahme)",
+    timeout: "Zeitüberschreitung bei der Spracherkennung (der Server hat nicht innerhalb von 60 Sekunden geantwortet)",
+    movedToChat: (name) => `Sprache erkannt und in "${name}" übernommen`,
+    pasted: "Sprache erkannt und in den Chat eingefügt",
+    originChat: "der ursprüngliche Chat",
+    chat: "Chat",
+    newChat: "Neuer Chat",
+    cancelRecording: "Aufnahme abbrechen",
+    finishRecording: "Aufnahme beenden und erkennen",
+    transcribing: "Erkennung läuft...",
+    badgeLabel: (title) => `In den Chat: "${title}"`,
+    badgeTitle: (title) => `Aufnahme für den Chat "${title}". Klicken, um dorthin zurückzukehren.`,
+  },
+  machine: {
+    label: "Erkennungsrechner",
+    hint: "Wo die Erkennung läuft. Lokale Modelle funktionieren nur unter macOS.",
+    auto: "Automatisch: der Serverrechner",
+    cloudOnly: (name) => `${name} (nur Cloud-Engines)`,
+  },
+
   errors: { machineUnreachable: (reason) => `Der Erkennungsrechner ist nicht erreichbar: ${reason}` },
 };

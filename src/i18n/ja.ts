@@ -120,5 +120,31 @@ export const ja: Dictionary = {
     author: "作者",
   },
 
+  voice: {
+    micError: "マイクの録音エラー",
+    micFailed: "マイクをオンにできませんでした",
+    micDenied: "ブラウザでマイクへのアクセスがブロックされています",
+    micNotFound: "マイクが見つかりません",
+    tooShort: "録音が短すぎます（1秒未満）",
+    notRecognized: "音声を認識できませんでした（録音が無音です）",
+    timeout: "音声認識がタイムアウトしました（サーバーが60秒以内に応答しませんでした）",
+    movedToChat: (name) => `音声を認識して「${name}」に移しました`,
+    pasted: "音声を認識してチャットに挿入しました",
+    originChat: "元のチャット",
+    chat: "チャット",
+    newChat: "新しいチャット",
+    cancelRecording: "録音をキャンセル",
+    finishRecording: "録音を終了して認識",
+    transcribing: "認識中...",
+    badgeLabel: (title) => `チャットへ: 「${title}」`,
+    badgeTitle: (title) => `チャット「${title}」用に録音中。クリックで戻ります。`,
+  },
+  machine: {
+    label: "認識用の端末",
+    hint: "認識を実行する場所。ローカルモデルは macOS でのみ動作します。",
+    auto: "自動: サーバーの端末",
+    cloudOnly: (name) => `${name}（クラウドエンジンのみ）`,
+  },
+
   errors: { machineUnreachable: (reason) => `認識用の端末に接続できません: ${reason}` },
 };

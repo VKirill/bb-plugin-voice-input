@@ -121,5 +121,31 @@ export const pt: Dictionary = {
     author: "Autor",
   },
 
+  voice: {
+    micError: "Erro de gravação do microfone",
+    micFailed: "Não foi possível ligar o microfone",
+    micDenied: "O acesso ao microfone está bloqueado no navegador",
+    micNotFound: "Microfone não encontrado",
+    tooShort: "Gravação curta demais (menos de um segundo)",
+    notRecognized: "Não foi possível reconhecer a fala (silêncio na gravação)",
+    timeout: "Tempo esgotado no reconhecimento de fala (o servidor não respondeu em 60 segundos)",
+    movedToChat: (name) => `Voz reconhecida e levada para "${name}"`,
+    pasted: "Fala reconhecida e inserida no chat",
+    originChat: "o chat de origem",
+    chat: "Chat",
+    newChat: "Novo chat",
+    cancelRecording: "Cancelar gravação",
+    finishRecording: "Terminar a gravação e reconhecer",
+    transcribing: "Reconhecendo...",
+    badgeLabel: (title) => `Para o chat: "${title}"`,
+    badgeTitle: (title) => `Gravando para o chat "${title}". Clique para voltar a ele.`,
+  },
+  machine: {
+    label: "Máquina de reconhecimento",
+    hint: "Onde o reconhecimento roda. Modelos locais só funcionam no macOS.",
+    auto: "Automático: a máquina do servidor",
+    cloudOnly: (name) => `${name} (só motores na nuvem)`,
+  },
+
   errors: { machineUnreachable: (reason) => `A máquina de reconhecimento está inacessível: ${reason}` },
 };

@@ -5,6 +5,7 @@
 
 import { rememberComposerCaretFromDocument } from "./composer-insert.ts";
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
+import { loadFrontendLanguage, words } from "./words.ts";
 import {
   HOLD_MS,
   HOTKEY_EVENT,
@@ -130,19 +131,19 @@ export function resolveCurrentVoiceTarget(): VoiceTarget {
     }
   }
 
-  let threadTitle = "Чат";
+  let threadTitle = "";
   try {
     const headerTitle = document.querySelector("header h1, [data-thread-title]")?.textContent?.trim();
     if (headerTitle) {
       threadTitle = headerTitle;
     } else if (document.title && !document.title.startsWith("bb")) {
-      threadTitle = document.title.split("·")[0]?.trim() || "Чат";
+      threadTitle = document.title.split("·")[0]?.trim() || "";
     }
   } catch {}
 
   return threadId
     ? { kind: "thread", threadId, projectId, originPath, threadTitle, promptContext }
-    : { kind: "new-thread", originPath, threadTitle: "Новый чат", promptContext };
+    : { kind: "new-thread", originPath, threadTitle: "", promptContext };
 }
 
 export function toggleVoiceRecording() {
@@ -186,6 +187,7 @@ function ensureVoiceStyles() {
 
 export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } = {}) {
   ensureVoiceStyles();
+  void loadFrontendLanguage();
 
   let lastTriggerTime = 0;
   let barElement: HTMLElement | null = null;
@@ -401,8 +403,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     const cancelBtn = document.createElement("button");
     cancelBtn.id = "bb-voice-cancel-btn";
     cancelBtn.type = "button";
-    cancelBtn.title = "Отменить запись";
-    cancelBtn.setAttribute("aria-label", "Отменить запись");
+    cancelBtn.title = words().voice.cancelRecording;
+    cancelBtn.setAttribute("aria-label", words().voice.cancelRecording);
     cancelBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
     cancelBtn.style.cssText = `display:flex;width:34px;height:34px;min-width:34px;min-height:34px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:transparent;cursor:pointer;color:var(--muted-foreground,#71717a);flex-shrink:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;`;
 
@@ -470,8 +472,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     const confirmBtn = document.createElement("button");
     confirmBtn.id = "bb-voice-confirm-btn";
     confirmBtn.type = "button";
-    confirmBtn.title = "Завершить запись и распознать";
-    confirmBtn.setAttribute("aria-label", "Завершить запись и распознать");
+    confirmBtn.title = words().voice.finishRecording;
+    confirmBtn.setAttribute("aria-label", words().voice.finishRecording);
     confirmBtn.innerHTML = CHECK_SVG;
     confirmBtn.style.cssText = `display:flex;width:34px;height:34px;min-width:34px;min-height:34px;align-items:center;justify-content:center;border-radius:9999px;border:none;background:#ef4444;color:#ffffff;cursor:pointer;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.3);touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;`;
 
@@ -502,8 +504,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       lastBadgeVisible = visible;
     }
     if (visible && targetTitle !== lastBadgeTitle) {
-      badgeLabel.textContent = `В чат: «${targetTitle}»`;
-      badgeElement.title = `Запись идёт для чата «${targetTitle}». Нажмите, чтобы вернуться в него.`;
+      badgeLabel.textContent = words().voice.badgeLabel(targetTitle);
+      badgeElement.title = words().voice.badgeTitle(targetTitle);
       lastBadgeTitle = targetTitle;
     }
   };
@@ -611,7 +613,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       snapshot.target?.kind === "thread" && snapshot.target.threadId
         ? currentPath.includes(snapshot.target.threadId)
         : !currentPath.includes("/threads/") && !currentPath.includes("#thr_");
-    const targetTitle = snapshot.target?.threadTitle || "Чат";
+    const targetTitle =
+      snapshot.target?.threadTitle || (snapshot.target?.kind === "new-thread" ? words().voice.newChat : words().voice.chat);
     const isTranscribing = snapshot.state === "transcribing";
 
     // Обновляем состояние кнопки подтверждения / спиннера
@@ -621,21 +624,21 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         confirmBtnElement.style.opacity = "0.75";
         confirmBtnElement.style.cursor = "default";
         confirmBtnElement.innerHTML = SPINNER_SVG;
-        confirmBtnElement.title = "Идёт распознавание...";
-        confirmBtnElement.setAttribute("aria-label", "Идёт распознавание...");
+        confirmBtnElement.title = words().voice.transcribing;
+        confirmBtnElement.setAttribute("aria-label", words().voice.transcribing);
       } else {
         confirmBtnElement.disabled = false;
         confirmBtnElement.style.opacity = "1";
         confirmBtnElement.style.cursor = "pointer";
         confirmBtnElement.innerHTML = CHECK_SVG;
-        confirmBtnElement.title = "Завершить запись и распознать";
-        confirmBtnElement.setAttribute("aria-label", "Завершить запись и распознать");
+        confirmBtnElement.title = words().voice.finishRecording;
+        confirmBtnElement.setAttribute("aria-label", words().voice.finishRecording);
       }
     }
 
     // Обновляем таймер при необходимости
     if (timerElement) {
-      const nextText = isTranscribing ? "Распознавание..." : formatDuration(globalVoiceSession.getDurationMs());
+      const nextText = isTranscribing ? words().voice.transcribing : formatDuration(globalVoiceSession.getDurationMs());
       if (timerElement.textContent !== nextText) {
         timerElement.textContent = nextText;
       }

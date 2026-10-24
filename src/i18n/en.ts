@@ -121,5 +121,31 @@ export const en: Dictionary = {
     author: "Author",
   },
 
+  voice: {
+    micError: "Microphone recording error",
+    micFailed: "Could not turn on the microphone",
+    micDenied: "Microphone access is blocked in the browser",
+    micNotFound: "Microphone not found",
+    tooShort: "Recording too short (under one second)",
+    notRecognized: "Could not recognize speech (silence in the recording)",
+    timeout: "Speech recognition timed out (no server reply within 60 seconds)",
+    movedToChat: (name) => `Voice recognized and moved to "${name}"`,
+    pasted: "Speech recognized and inserted into the chat",
+    originChat: "the original chat",
+    chat: "Chat",
+    newChat: "New chat",
+    cancelRecording: "Cancel recording",
+    finishRecording: "Finish recording and transcribe",
+    transcribing: "Transcribing...",
+    badgeLabel: (title) => `To chat: "${title}"`,
+    badgeTitle: (title) => `Recording for chat "${title}". Click to go back to it.`,
+  },
+  machine: {
+    label: "Recognition machine",
+    hint: "Where recognition runs. Local models only work on macOS.",
+    auto: "Automatic: the server machine",
+    cloudOnly: (name) => `${name} (cloud engines only)`,
+  },
+
   errors: { machineUnreachable: (reason) => `The recognition machine is unreachable: ${reason}` },
 };

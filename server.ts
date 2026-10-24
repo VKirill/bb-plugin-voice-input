@@ -132,6 +132,10 @@ export const rpcContract = defineRpcContract({
     input: z.object({ engine: z.enum(ENGINE_IDS), model: z.string() }),
     output: z.object({ freedBytes: z.number() }),
   },
+  uiLanguage: {
+    input: z.null(),
+    output: z.object({ uiLanguage: z.string() }),
+  },
   updateSettings: {
     input: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
     output: z.object({ saved: z.boolean() }),
@@ -351,6 +355,7 @@ export default async function plugin(bb: BbPluginApi) {
 
 
   bb.rpc.register(rpcContract, {
+    uiLanguage: async () => ({ uiLanguage: (await readSettings()).uiLanguage }),
     state: async () => {
       let hostId: string;
       try {
