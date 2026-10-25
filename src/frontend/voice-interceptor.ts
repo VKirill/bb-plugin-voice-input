@@ -399,6 +399,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   const createBarElement = () => {
     const bar = document.createElement("div");
     bar.id = "bb-voice-active-bar";
+    bar.setAttribute("data-bb-ru-skip", "");
 
     // Кнопка отмены [ X ]
     const cancelBtn = document.createElement("button");

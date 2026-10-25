@@ -2,7 +2,7 @@
 // на экран целиком. Здесь же видно состояние движков на машине распознавания
 // и ход загрузки модели — молчаливое ожидание в минуту это худшее, что может
 // показать голосовой ввод.
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { definePluginApp, UrlLink, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -438,6 +438,10 @@ function VoiceInputSettings() {
   const [vocabularyDraft, setVocabularyDraft] = useState<string | null>(null);
   const [diskModels, setDiskModels] = useState<DiskModel[]>([]);
   const [catalog, setCatalog] = useState<Catalog>(null);
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingSaves = useRef(0);
+  const settingsRevision = useRef(0);
+  const refreshRequest = useRef(0);
 
   const refreshModels = useCallback(async () => {
     try {
@@ -448,8 +452,14 @@ function VoiceInputSettings() {
   }, [rpc]);
 
   const refresh = useCallback(async () => {
+    if (pendingSaves.current > 0) return;
+    const revision = settingsRevision.current;
+    const request = ++refreshRequest.current;
     try {
-      setState((await rpc.call("state", { uiLanguage: language })) as PageState);
+      const next = (await rpc.call("state", { uiLanguage: frontendLanguage() })) as PageState;
+      if (pendingSaves.current === 0 && revision === settingsRevision.current && request === refreshRequest.current) {
+        setState(next);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -486,11 +496,15 @@ function VoiceInputSettings() {
   });
 
   const save = async (patch: SettingsValues) => {
+    pendingSaves.current += 1;
+    settingsRevision.current += 1;
     setState((previous) =>
       previous ? { ...previous, settings: { ...previous.settings, ...patch } } : previous,
     );
+    const saving = saveQueue.current.then(() => rpc.call("updateSettings", patch));
+    saveQueue.current = saving.catch(() => {});
     try {
-      await rpc.call("updateSettings", patch);
+      await saving;
       if (
         "hotkeyEnabled" in patch ||
         "hotkeyCode" in patch ||
@@ -503,7 +517,9 @@ function VoiceInputSettings() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
-      await refresh();
+    } finally {
+      pendingSaves.current -= 1;
+      if (pendingSaves.current === 0) await refresh();
     }
   };
 
@@ -537,7 +553,7 @@ function VoiceInputSettings() {
     state.progress && state.progress.state === "downloading" ? state.progress : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" lang={language} translate="no" data-bb-ru-skip="">
       <div className="flex items-center justify-end gap-2">
         <span className="text-xs text-muted-foreground">{t.language.label}</span>
         <Select
