@@ -566,7 +566,7 @@ function VoiceInputSettings() {
         />
       </div>
 
-      <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+      <div className="flex flex-wrap gap-1 rounded-lg bg-muted/50 p-1">
         {TABS.map((item) => (
           <button
             key={item.id}
