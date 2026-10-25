@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const en: Dictionary = {
   tabs: { general: "General", dictation: "Dictation", vocabulary: "Vocabulary", cloud: "Cloud", data: "Data" },
-  language: { label: "Interface language" },
+  language: { auto: "Same as BB", label: "Interface language" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Multilingual, keeps tool names intact. Default choice." },
@@ -14,6 +14,8 @@ export const en: Dictionary = {
   status: { ready: "ready", notInstalled: "not installed", needsKey: "needs a key", broken: "package does not import", loading: "Loading…" },
 
   general: {
+    model4bit: "large-v3 4-bit (recommended)",
+    modelFull: "large-v3 (full precision)",
     installEngine: "Install the engine",
     installing: "Installing — this takes minutes.",
     whisperModel: "Whisper model",
@@ -121,5 +123,52 @@ export const en: Dictionary = {
     author: "Author",
   },
 
-  errors: { machineUnreachable: (reason) => `The recognition machine is unreachable: ${reason}` },
+  voice: {
+    micError: "Microphone recording error",
+    micFailed: "Could not turn on the microphone",
+    micDenied: "Microphone access is blocked in the browser",
+    micNotFound: "Microphone not found",
+    tooShort: "Recording too short (under half a second)",
+    notRecognized: "Could not recognize speech (silence in the recording)",
+    timeout: "Speech recognition timed out (no server reply within 60 seconds)",
+    movedToChat: (name) => `Voice recognized and moved to "${name}"`,
+    pasted: "Speech recognized and inserted into the chat",
+    originChat: "the original chat",
+    chat: "Chat",
+    newChat: "New chat",
+    cancelRecording: "Cancel recording",
+    finishRecording: "Finish recording and transcribe",
+    transcribing: "Transcribing...",
+    badgeLabel: (title) => `To chat: "${title}"`,
+    badgeTitle: (title) => `Recording for chat "${title}". Click to go back to it.`,
+  },
+  machine: {
+    label: "Recognition machine",
+    hint: "Where recognition runs. Local models only work on macOS.",
+    auto: "Automatic: the server machine",
+    cloudOnly: (name) => `${name} (cloud engines only)`,
+  },
+
+  system: {
+    cloudSetup: "Cloud engines need only an API key in settings. Audio is sent to the provider.",
+    pythonMissing: "Python 3 is missing on the recognition machine. Install it and try again.",
+    ffmpegMissing: "ffmpeg is missing on the recognition machine. It is required to decode browser recordings.",
+    engineInstalled: (engine: string) => `${engine} is installed. The model will download on the first transcription.`,
+    cloudNoModel: "Cloud engines do not store models locally.",
+    modelReady: (engine: string) => `The ${engine} model is ready.`,
+    noSpeech: "No speech detected (the recording is silent).",
+    transcribeTimeout: "Speech recognition exceeded the time limit.",
+    fileMissing: (path: string) => `File not found on the recognition machine: ${path}`,
+    engineMissing: (engine: string) => `${engine} is not installed. Run bb voice-input setup.`,
+    daemonFailed: (seconds: number, path: string) => `The recognition daemon did not start within ${seconds} seconds. See ${path}.`,
+    downloadTimeout: "Model download exceeded the one-hour limit.",
+    downloadFailed: (code: number | null, detail: string) => `Model download failed (exit ${code}). ${detail}`,
+    localUnsupported: (platform: string) => `Local models require macOS and cannot run on ${platform}. Choose another machine or a cloud engine.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `The recognition machine is unreachable: ${reason}`,
+    keyRequired: (engine) => `${engine} needs an API key: Voice Input settings → Cloud.`,
+    keyEnvMissing: (name) => `The variable ${name} is not set on the recognition machine.`,
+  },
 };

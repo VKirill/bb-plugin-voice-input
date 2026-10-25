@@ -13,6 +13,23 @@ bb voice-input status
 
 Local engines need Python 3 and `ffmpeg` on the recognition host. Cloud engines need a provider key. See [Deployment](docs/deployment.md) for the full setup.
 
+## Interface language
+
+Settings, recording controls, notifications and plugin error messages support English, Russian, Portuguese, Spanish, German, French, Chinese and Japanese. New installations follow the BB interface language; choose **Same as BB** or an explicit language in the plugin settings. Existing language choices are preserved. Speech language is a separate setting.
+
+Regional interface codes such as `pt-BR` and `ru-RU` use the matching translation; unsupported languages use English. The recording language travels with its request, without changing the saved configuration. Technical diagnostics returned by third-party services may remain in their original language.
+
+Thanks to [@masalles](https://github.com/masalles) for the missing-key and recording-interface translations in [PR #1](https://github.com/VKirill/bb-plugin-voice-input/pull/1) and [PR #2](https://github.com/VKirill/bb-plugin-voice-input/pull/2).
+
+To verify translations and the built recognition host:
+
+```sh
+npm test
+npm run typecheck
+npm run build
+npm run test:host
+```
+
 ## Documentation
 
 - [Project overview](docs/overview.md)

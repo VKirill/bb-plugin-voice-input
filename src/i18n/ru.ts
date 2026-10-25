@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const ru: Dictionary = {
   tabs: { general: "Основные", dictation: "Диктовка", vocabulary: "Словарь", cloud: "Облако", data: "Данные" },
-  language: { label: "Язык интерфейса" },
+  language: { auto: "Как в BB", label: "Язык интерфейса" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Многоязычный, держит названия инструментов. Выбор по умолчанию." },
@@ -14,6 +14,8 @@ export const ru: Dictionary = {
   status: { ready: "готов", notInstalled: "не установлен", needsKey: "нужен ключ", broken: "пакет не импортируется", loading: "Загружаю…" },
 
   general: {
+    model4bit: "large-v3 4-bit (рекомендуется)",
+    modelFull: "large-v3 (полная точность)",
     installEngine: "Установить движок",
     installing: "Устанавливаю — это занимает минуты.",
     whisperModel: "Модель Whisper",
@@ -121,5 +123,52 @@ export const ru: Dictionary = {
     author: "Автор",
   },
 
-  errors: { machineUnreachable: (reason) => `Машина распознавания недоступна: ${reason}` },
+  voice: {
+    micError: "Ошибка записи с микрофона",
+    micFailed: "Не удалось включить микрофон",
+    micDenied: "Доступ к микрофону заблокирован в браузере",
+    micNotFound: "Микрофон не найден",
+    tooShort: "Запись слишком короткая (менее половины секунды)",
+    notRecognized: "Не удалось распознать речь (тишина на записи)",
+    timeout: "Таймаут распознавания речи (сервер не ответил за 60 секунд)",
+    movedToChat: (name) => `Голос распознан и перенесён в «${name}»`,
+    pasted: "Речь распознана и вставлена в чат",
+    originChat: "исходный чат",
+    chat: "Чат",
+    newChat: "Новый чат",
+    cancelRecording: "Отменить запись",
+    finishRecording: "Завершить запись и распознать",
+    transcribing: "Идёт распознавание...",
+    badgeLabel: (title) => `В чат: «${title}»`,
+    badgeTitle: (title) => `Запись идёт для чата «${title}». Нажмите, чтобы вернуться в него.`,
+  },
+  machine: {
+    label: "Машина распознавания",
+    hint: "Где выполняется распознавание. Локальные модели работают только на macOS.",
+    auto: "Автоматически — машина сервера",
+    cloudOnly: (name) => `${name} — только облачные движки`,
+  },
+
+  system: {
+    cloudSetup: "Облачному движку нужен только ключ в настройках. Аудио отправляется провайдеру.",
+    pythonMissing: "На машине распознавания нет Python 3. Установите его и повторите попытку.",
+    ffmpegMissing: "На машине распознавания нет ffmpeg — он нужен для декодирования браузерной записи.",
+    engineInstalled: (engine: string) => `Движок ${engine} установлен. Модель скачается при первом распознавании.`,
+    cloudNoModel: "Облачный движок не хранит модели локально.",
+    modelReady: (engine: string) => `Модель ${engine} готова.`,
+    noSpeech: "Речь не обнаружена (тишина на записи).",
+    transcribeTimeout: "Распознавание не уложилось в отведённое время.",
+    fileMissing: (path: string) => `Файл не найден на машине распознавания: ${path}`,
+    engineMissing: (engine: string) => `Движок ${engine} не установлен. Запустите bb voice-input setup.`,
+    daemonFailed: (seconds: number, path: string) => `Демон распознавания не запустился за ${seconds} с. См. ${path}.`,
+    downloadTimeout: "Загрузка модели не уложилась в час.",
+    downloadFailed: (code: number | null, detail: string) => `Загрузка модели завершилась с кодом ${code}. ${detail}`,
+    localUnsupported: (platform: string) => `Локальным моделям нужна macOS: на ${platform} они не запускаются. Выберите другую машину или облачный движок.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `Машина распознавания недоступна: ${reason}`,
+    keyRequired: (engine) => `Для движка ${engine} нужен ключ: Настройки → Голосовой ввод → Облако.`,
+    keyEnvMissing: (name) => `Переменной ${name} нет на машине распознавания.`,
+  },
 };

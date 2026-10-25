@@ -2,7 +2,7 @@
 // на экран целиком. Здесь же видно состояние движков на машине распознавания
 // и ход загрузки модели — молчаливое ожидание в минуту это худшее, что может
 // показать голосовой ввод.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { definePluginApp, UrlLink, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
 import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
+import { frontendLanguage, setFrontendLanguage, subscribeFrontendLanguage, words } from "./src/frontend/words";
 import {
   HOTKEY_PRESETS,
   configFromKeyboardEvent,
@@ -430,6 +431,7 @@ function HotkeySettings({
 
 function VoiceInputSettings() {
   const rpc = useRpc<typeof rpcContract>();
+  const language = useSyncExternalStore(subscribeFrontendLanguage, frontendLanguage);
   const [state, setState] = useState<PageState | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("general");
   const [busy, setBusy] = useState<string | null>(null);
@@ -447,11 +449,15 @@ function VoiceInputSettings() {
 
   const refresh = useCallback(async () => {
     try {
-      setState((await rpc.call("state", null)) as PageState);
+      setState((await rpc.call("state", { uiLanguage: language })) as PageState);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
-  }, [rpc]);
+  }, [rpc, language]);
+
+  useEffect(() => {
+    if (typeof state?.settings.uiLanguage === "string") setFrontendLanguage(state.settings.uiLanguage);
+  }, [state?.settings.uiLanguage]);
 
   useEffect(() => {
     if (state?.settings) {
@@ -505,10 +511,10 @@ function VoiceInputSettings() {
     setBusy(`${engine}:${action}`);
     try {
       if (action === "setup") {
-        const result = await rpc.call("setupEngine", { engine });
+        const result = await rpc.call("setupEngine", { engine, uiLanguage: language });
         toast[result.ready ? "success" : "error"](result.detail);
       } else {
-        const result = await rpc.call("downloadEngineModel", { engine });
+        const result = await rpc.call("downloadEngineModel", { engine, uiLanguage: language });
         toast[result.ready ? "success" : "error"](result.detail);
       }
       await refresh();
@@ -520,11 +526,11 @@ function VoiceInputSettings() {
   };
 
   if (!state) {
-    return <p className="text-sm text-muted-foreground">{dictionary("en").status.loading}</p>;
+    return <p className="text-sm text-muted-foreground">{words().status.loading}</p>;
   }
 
   const values = state.settings;
-  const t = dictionary(String(values.uiLanguage ?? "en"));
+  const t = dictionary(language);
   const vocabulary = vocabularyDraft ?? String(values.vocabulary ?? "");
   const activeEngine = state.engines.find((engine) => engine.engine === state.activeEngine);
   const progress =
@@ -535,8 +541,11 @@ function VoiceInputSettings() {
       <div className="flex items-center justify-end gap-2">
         <span className="text-xs text-muted-foreground">{t.language.label}</span>
         <Select
-          value={String(values.uiLanguage ?? "en")}
-          options={UI_LANGUAGES.map((code) => ({ value: code, label: LANGUAGE_NAMES[code] }))}
+          value={String(values.uiLanguage ?? "auto")}
+          options={[
+            { value: "auto", label: t.language.auto },
+            ...UI_LANGUAGES.map((code) => ({ value: code, label: LANGUAGE_NAMES[code] })),
+          ]}
           onChange={(next) => void save({ uiLanguage: next })}
         />
       </div>
@@ -635,25 +644,29 @@ function VoiceInputSettings() {
             >
               <Select
                 value={String(values.whisperModel ?? "")}
-                options={state.whisperModelOptions.map((option) => ({ value: option, label: option }))}
+                options={state.whisperModelOptions.map((option) => ({
+                  value: option,
+                  label: option.includes("4-bit") ? t.general.model4bit
+                    : option.includes("large-v3") ? t.general.modelFull : option,
+                }))}
                 onChange={(next) => void save({ whisperModel: next })}
               />
             </Row>
           )}
 
           <Row
-            label="Машина распознавания"
-            hint="Где выполняется распознавание. Локальные модели работают только на macOS."
+            label={t.machine.label}
+            hint={t.machine.hint}
           >
             <Select
               value={String(values.machine ?? "")}
               options={[
-                { value: "", label: "Автоматически — машина сервера" },
+                { value: "", label: t.machine.auto },
                 ...state.machines.map((item) => ({
                   value: item.id,
                   label: item.localEnginesPossible
                     ? item.name
-                    : `${item.name} — только облачные движки`,
+                    : t.machine.cloudOnly(item.name),
                 })),
               ]}
               onChange={(next) => void save({ machine: next })}

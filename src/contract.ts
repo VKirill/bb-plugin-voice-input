@@ -4,6 +4,7 @@
 // и принадлежит SDK.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { UI_LANGUAGES } from "./i18n/index.ts";
 
 export const ENGINE_IDS = ["whisper", "gigaam", "openai", "google", "groq"] as const;
 export type EngineId = (typeof ENGINE_IDS)[number];
@@ -23,6 +24,8 @@ export const voiceConfigSchema = z
     /** Репозиторий модели для Whisper; GigaAM берёт свою. */
     whisperModel: z.string().min(1),
     language: z.enum(LANGUAGES),
+    /** Язык интерфейса: на нём хост формулирует ошибки, которые видит пользователь. */
+    uiLanguage: z.string().default("en"),
     vocabulary: z.string(),
     vocabularyRepair: z.boolean(),
     vocabularyPrompt: z.boolean(),
@@ -102,7 +105,7 @@ export const managementContract = defineRpcContract({
     output: z.object({ applied: z.literal(true) }).strict(),
   },
   setup: {
-    input: z.object({ engine: z.enum(ENGINE_IDS), reinstall: z.boolean() }).strict(),
+    input: z.object({ engine: z.enum(ENGINE_IDS), reinstall: z.boolean(), uiLanguage: z.enum(UI_LANGUAGES).optional() }).strict(),
     output: z
       .object({ ready: z.boolean(), log: z.string(), detail: z.string() })
       .strict(),
@@ -121,7 +124,7 @@ export const managementContract = defineRpcContract({
   },
   /** Скачать модель движка заранее, с прогрессом через сигналы. */
   downloadModel: {
-    input: z.object({ engine: z.enum(ENGINE_IDS) }).strict(),
+    input: z.object({ engine: z.enum(ENGINE_IDS), uiLanguage: z.enum(UI_LANGUAGES).optional() }).strict(),
     output: z.object({ ready: z.boolean(), detail: z.string() }).strict(),
   },
   /** Имена переменных окружения, значения которых видит машина распознавания. */
@@ -193,6 +196,7 @@ export const managementContract = defineRpcContract({
         filename: z.string().optional(),
         prompt: z.string().nullable().optional(),
         timeoutMs: z.number().int().positive().optional(),
+        uiLanguage: z.enum(UI_LANGUAGES).optional(),
       })
       .strict(),
     output: z

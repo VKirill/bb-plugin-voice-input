@@ -1,3 +1,4 @@
+import { dictionary } from "./i18n/index.ts";
 // Запуск и вызов демона распознавания. Демон живёт дольше воркера плагина:
 // модель загружается десятки секунд, и платить это на каждую фразу нельзя.
 import { spawn } from "node:child_process";
@@ -101,6 +102,7 @@ export async function ensureDaemon(
   paths: HostPaths,
   engine: EngineId,
   idleTimeoutSeconds: number,
+  language = "en",
 ): Promise<void> {
   if (await isAlive(paths, engine)) {
     return;
@@ -111,7 +113,7 @@ export async function ensureDaemon(
   const python = paths.venvPython(engine);
   if (!existsSync(python)) {
     throw new Error(
-      `Окружение движка «${engine}» не установлено. Запустите «bb voice-input setup».`,
+      dictionary(language).system.engineMissing(engine),
     );
   }
 
@@ -137,7 +139,7 @@ export async function ensureDaemon(
     await delay(250);
   }
   throw new Error(
-    `Демон распознавания не поднялся за ${DAEMON_START_TIMEOUT_MS / 1000} с; см. ${paths.daemonLog(engine)}`,
+    dictionary(language).system.daemonFailed(DAEMON_START_TIMEOUT_MS / 1000, paths.daemonLog(engine)),
   );
 }
 

@@ -26,8 +26,13 @@ export const LANGUAGE_NAMES: Record<UiLanguage, string> = {
 
 const DICTIONARIES: Record<UiLanguage, Dictionary> = { en, ru, es, de, fr, pt, zh, ja };
 
+export function resolveUiLanguage(language: string): UiLanguage {
+  const code = language.toLowerCase().split(/[-_]/)[0] ?? "";
+  return UI_LANGUAGES.includes(code as UiLanguage) ? code as UiLanguage : "en";
+}
+
 export function dictionary(language: string): Dictionary {
-  return DICTIONARIES[language as UiLanguage] ?? en;
+  return DICTIONARIES[resolveUiLanguage(language)];
 }
 
 export type { Dictionary };

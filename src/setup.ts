@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { arch, platform } from "node:os";
 import { join } from "node:path";
 import type { EngineId } from "./contract.js";
+import { dictionary } from "./i18n/index.ts";
 import { ENGINE_REQUIREMENTS, type HostPaths } from "./paths.js";
 
 const run = promisify(execFile);
@@ -63,7 +64,9 @@ export async function setupEngine(
   paths: HostPaths,
   engine: EngineId,
   reinstall: boolean,
+  language = "en",
 ): Promise<SetupResult> {
+  const words = dictionary(language).system;
   const log: string[] = [];
   const note = (line: string) => log.push(line);
 
@@ -72,7 +75,7 @@ export async function setupEngine(
       ready: true,
       log: "",
       detail:
-        "Облачный движок ничего не устанавливает: нужен только ключ в настройках. Аудио при этом уходит наружу.",
+        words.cloudSetup,
     };
   }
 
@@ -81,7 +84,7 @@ export async function setupEngine(
     return {
       ready: false,
       log: log.join("\n"),
-      detail: "На машине нет Python 3. Установите его и повторите установку.",
+      detail: words.pythonMissing,
     };
   }
   note(`Python: ${python}`);
@@ -91,7 +94,7 @@ export async function setupEngine(
     return {
       ready: false,
       log: log.join("\n"),
-      detail: "На машине нет ffmpeg — без него браузерная запись не декодируется.",
+      detail: words.ffmpegMissing,
     };
   }
   note(`ffmpeg: ${ffmpeg}`);
@@ -101,13 +104,13 @@ export async function setupEngine(
   const venvPython = paths.venvPython(engine);
 
   if (reinstall || !existsSync(venvPython)) {
-    note(`Создаю окружение ${venvDir}`);
+    note(`Creating environment ${venvDir}`);
     await run(python, ["-m", "venv", ...(reinstall ? ["--clear"] : []), venvDir], {
       timeout: INSTALL_TIMEOUT_MS,
     });
   }
 
-  note(`Ставлю пакеты: ${ENGINE_REQUIREMENTS[engine].join(", ")}`);
+  note(`Installing packages: ${ENGINE_REQUIREMENTS[engine].join(", ")}`);
   const install = await run(
     venvPython,
     ["-m", "pip", "install", "--upgrade", "pip", ...ENGINE_REQUIREMENTS[engine]],
@@ -118,7 +121,7 @@ export async function setupEngine(
   return {
     ready: true,
     log: log.join("\n"),
-    detail: `Движок «${engine}» установлен. Первое распознавание дополнительно скачает модель.`,
+    detail: words.engineInstalled(engine),
   };
 }
 

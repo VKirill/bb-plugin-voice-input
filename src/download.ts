@@ -1,3 +1,4 @@
+import { dictionary } from "./i18n/index.ts";
 // Загрузка модели движка с прогрессом. Питоновский скрипт печатает построчный
 // JSON, здесь он превращается в сигналы для интерфейса.
 import { spawn } from "node:child_process";
@@ -17,10 +18,12 @@ export async function downloadModel(
   engine: EngineId,
   model: string,
   onEvent: (event: DownloadEvent) => void,
+  language = "en",
 ): Promise<void> {
+  const words = dictionary(language).system;
   const python = paths.venvPython(engine);
   if (!existsSync(python)) {
-    throw new Error(`Окружение движка «${engine}» не установлено: сначала «bb voice-input setup».`);
+    throw new Error(words.engineMissing(engine));
   }
 
   await new Promise<void>((resolve, reject) => {
@@ -32,7 +35,7 @@ export async function downloadModel(
 
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error("Загрузка модели не уложилась в час"));
+      reject(new Error(words.downloadTimeout));
     }, DOWNLOAD_TIMEOUT_MS);
 
     let stdout = "";
@@ -77,7 +80,7 @@ export async function downloadModel(
       } else if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Загрузка модели завершилась с кодом ${code}. ${stderrTail.trim()}`));
+        reject(new Error(words.downloadFailed(code, stderrTail.trim())));
       }
     });
   });

@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const zh: Dictionary = {
   tabs: { general: "常规", dictation: "听写", vocabulary: "词表", cloud: "云端", data: "数据" },
-  language: { label: "界面语言" },
+  language: { auto: "与 BB 相同", label: "界面语言" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "多语种，能保住工具名称。默认选项。" },
@@ -14,6 +14,8 @@ export const zh: Dictionary = {
   status: { ready: "就绪", notInstalled: "未安装", needsKey: "需要密钥", broken: "无法导入依赖包", loading: "加载中…" },
 
   general: {
+    model4bit: "large-v3 4-bit（推荐）",
+    modelFull: "large-v3（完整精度）",
     installEngine: "安装引擎",
     installing: "正在安装，需要几分钟。",
     whisperModel: "Whisper 模型",
@@ -120,5 +122,52 @@ export const zh: Dictionary = {
     author: "作者",
   },
 
-  errors: { machineUnreachable: (reason) => `无法连接识别机器：${reason}` },
+  voice: {
+    micError: "麦克风录音出错",
+    micFailed: "无法打开麦克风",
+    micDenied: "浏览器已阻止麦克风访问",
+    micNotFound: "未找到麦克风",
+    tooShort: "录音太短（不足半秒）",
+    notRecognized: "无法识别语音（录音中没有声音）",
+    timeout: "语音识别超时（服务器 60 秒内未响应）",
+    movedToChat: (name) => `语音已识别并转到“${name}”`,
+    pasted: "语音已识别并插入聊天",
+    originChat: "原聊天",
+    chat: "聊天",
+    newChat: "新聊天",
+    cancelRecording: "取消录音",
+    finishRecording: "结束录音并识别",
+    transcribing: "识别中...",
+    badgeLabel: (title) => `发送到聊天：“${title}”`,
+    badgeTitle: (title) => `正在为聊天“${title}”录音。点击返回。`,
+  },
+  machine: {
+    label: "识别机器",
+    hint: "识别运行的位置。本地模型只能在 macOS 上使用。",
+    auto: "自动：服务器所在机器",
+    cloudOnly: (name) => `${name}（仅云端引擎）`,
+  },
+
+  system: {
+    cloudSetup: "云端引擎只需在设置中配置 API 密钥。音频会发送给服务商。",
+    pythonMissing: "识别机器上没有 Python 3。请安装后重试。",
+    ffmpegMissing: "识别机器上没有 ffmpeg。解码浏览器录音需要此程序。",
+    engineInstalled: (engine: string) => `${engine} 已安装。首次转录时将下载模型。`,
+    cloudNoModel: "云端引擎不在本地存储模型。",
+    modelReady: (engine: string) => `${engine} 模型已就绪。`,
+    noSpeech: "未检测到语音（录音为静音）。",
+    transcribeTimeout: "语音识别超时。",
+    fileMissing: (path: string) => `识别机器上找不到文件：${path}`,
+    engineMissing: (engine: string) => `尚未安装 ${engine}。请运行 bb voice-input setup。`,
+    daemonFailed: (seconds: number, path: string) => `识别服务未能在 ${seconds} 秒内启动。请查看 ${path}。`,
+    downloadTimeout: "模型下载已超过一小时的时限。",
+    downloadFailed: (code: number | null, detail: string) => `模型下载失败（退出码 ${code}）。${detail}`,
+    localUnsupported: (platform: string) => `本地模型需要 macOS，无法在 ${platform} 上运行。请选择其他机器或云端引擎。`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `无法连接识别机器：${reason}`,
+    keyRequired: (engine) => `${engine} 引擎需要密钥：设置 → 语音输入 → 云端。`,
+    keyEnvMissing: (name) => `识别机器上没有环境变量 ${name}。`,
+  },
 };

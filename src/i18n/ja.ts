@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const ja: Dictionary = {
   tabs: { general: "基本", dictation: "音声入力", vocabulary: "用語集", cloud: "クラウド", data: "データ" },
-  language: { label: "表示言語" },
+  language: { auto: "BB に合わせる", label: "表示言語" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "多言語対応で、ツール名も崩しません。既定の選択肢です。" },
@@ -14,6 +14,8 @@ export const ja: Dictionary = {
   status: { ready: "利用可能", notInstalled: "未導入", needsKey: "キーが必要", broken: "パッケージを読み込めません", loading: "読み込み中…" },
 
   general: {
+    model4bit: "large-v3 4-bit（推奨）",
+    modelFull: "large-v3（完全精度）",
     installEngine: "エンジンを導入する",
     installing: "導入中です。数分かかります。",
     whisperModel: "Whisper のモデル",
@@ -120,5 +122,52 @@ export const ja: Dictionary = {
     author: "作者",
   },
 
-  errors: { machineUnreachable: (reason) => `認識用の端末に接続できません: ${reason}` },
+  voice: {
+    micError: "マイクの録音エラー",
+    micFailed: "マイクをオンにできませんでした",
+    micDenied: "ブラウザでマイクへのアクセスがブロックされています",
+    micNotFound: "マイクが見つかりません",
+    tooShort: "録音が短すぎます（0.5秒未満）",
+    notRecognized: "音声を認識できませんでした（録音が無音です）",
+    timeout: "音声認識がタイムアウトしました（サーバーが60秒以内に応答しませんでした）",
+    movedToChat: (name) => `音声を認識して「${name}」に移しました`,
+    pasted: "音声を認識してチャットに挿入しました",
+    originChat: "元のチャット",
+    chat: "チャット",
+    newChat: "新しいチャット",
+    cancelRecording: "録音をキャンセル",
+    finishRecording: "録音を終了して認識",
+    transcribing: "認識中...",
+    badgeLabel: (title) => `チャットへ: 「${title}」`,
+    badgeTitle: (title) => `チャット「${title}」用に録音中。クリックで戻ります。`,
+  },
+  machine: {
+    label: "認識用の端末",
+    hint: "認識を実行する場所。ローカルモデルは macOS でのみ動作します。",
+    auto: "自動: サーバーの端末",
+    cloudOnly: (name) => `${name}（クラウドエンジンのみ）`,
+  },
+
+  system: {
+    cloudSetup: "クラウドエンジンには設定画面での API キーの登録だけが必要です。音声はプロバイダーに送信されます。",
+    pythonMissing: "認識用の端末に Python 3 がありません。インストールして再試行してください。",
+    ffmpegMissing: "認識用の端末に ffmpeg がありません。ブラウザの録音をデコードするために必要です。",
+    engineInstalled: (engine: string) => `${engine} をインストールしました。初回の文字起こし時にモデルがダウンロードされます。`,
+    cloudNoModel: "クラウドエンジンはモデルをローカルに保存しません。",
+    modelReady: (engine: string) => `${engine} モデルの準備ができました。`,
+    noSpeech: "音声が検出されませんでした（録音が無音です）。",
+    transcribeTimeout: "音声認識が制限時間を超えました。",
+    fileMissing: (path: string) => `認識用の端末にファイルが見つかりません：${path}`,
+    engineMissing: (engine: string) => `${engine} がインストールされていません。bb voice-input setup を実行してください。`,
+    daemonFailed: (seconds: number, path: string) => `認識サービスが ${seconds} 秒以内に起動しませんでした。${path} を確認してください。`,
+    downloadTimeout: "モデルのダウンロードが1時間の制限を超えました。",
+    downloadFailed: (code: number | null, detail: string) => `モデルのダウンロードに失敗しました（終了コード ${code}）。${detail}`,
+    localUnsupported: (platform: string) => `ローカルモデルには macOS が必要です。${platform} では動作しません。別の端末またはクラウドエンジンを選択してください。`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `認識用の端末に接続できません: ${reason}`,
+    keyRequired: (engine) => `${engine} エンジンにはキーが必要です: 設定 → 音声入力 → クラウド。`,
+    keyEnvMissing: (name) => `認識用の端末に環境変数 ${name} がありません。`,
+  },
 };

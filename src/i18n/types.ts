@@ -4,7 +4,7 @@
 
 export type Dictionary = {
   tabs: { general: string; dictation: string; vocabulary: string; cloud: string; data: string };
-  language: { label: string };
+  language: { label: string; auto: string };
 
   engines: {
     whisper: { title: string; hint: string };
@@ -16,6 +16,8 @@ export type Dictionary = {
   status: { ready: string; notInstalled: string; needsKey: string; broken: string; loading: string };
 
   general: {
+    model4bit: string;
+    modelFull: string;
     installEngine: string;
     installing: string;
     whisperModel: string;
@@ -116,5 +118,48 @@ export type Dictionary = {
     author: string;
   };
 
-  errors: { machineUnreachable: (reason: string) => string };
+  /** Тосты и подписи записи в окне приложения (frontend). */
+  voice: {
+    micError: string;
+    micFailed: string;
+    micDenied: string;
+    micNotFound: string;
+    tooShort: string;
+    notRecognized: string;
+    timeout: string;
+    movedToChat: (name: string) => string;
+    pasted: string;
+    originChat: string;
+    chat: string;
+    newChat: string;
+    cancelRecording: string;
+    finishRecording: string;
+    transcribing: string;
+    badgeLabel: (title: string) => string;
+    badgeTitle: (title: string) => string;
+  };
+  machine: { label: string; hint: string; auto: string; cloudOnly: (name: string) => string };
+
+  system: {
+    cloudSetup: string;
+    pythonMissing: string;
+    ffmpegMissing: string;
+    engineInstalled: (engine: string) => string;
+    cloudNoModel: string;
+    modelReady: (engine: string) => string;
+    noSpeech: string;
+    transcribeTimeout: string;
+    fileMissing: (path: string) => string;
+    engineMissing: (engine: string) => string;
+    daemonFailed: (seconds: number, path: string) => string;
+    downloadTimeout: string;
+    downloadFailed: (code: number | null, detail: string) => string;
+    localUnsupported: (platform: string) => string;
+  };
+
+  errors: {
+    machineUnreachable: (reason: string) => string;
+    keyRequired: (engine: string) => string;
+    keyEnvMissing: (name: string) => string;
+  };
 };

@@ -18,7 +18,7 @@ import {
   managementContract,
   type VoiceConfig,
 } from "./src/contract.js";
-import { dictionary } from "./src/i18n/index.js";
+import { dictionary, UI_LANGUAGES, type UiLanguage } from "./src/i18n/index.js";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_WHISPER_MODEL,
@@ -48,7 +48,7 @@ const KEY_SLOTS = [
 /** Контракт страницы плагина: она читает состояние и запускает установку. */
 export const rpcContract = defineRpcContract({
   state: {
-    input: z.null(),
+    input: z.object({ uiLanguage: z.enum(UI_LANGUAGES).optional() }).nullable(),
     output: z.object({
       machine: z.string().nullable(),
       error: z.string().nullable(),
@@ -107,11 +107,11 @@ export const rpcContract = defineRpcContract({
     output: z.object({ available: z.boolean(), names: z.array(z.string()) }),
   },
   setupEngine: {
-    input: z.object({ engine: z.enum(ENGINE_IDS) }),
+    input: z.object({ engine: z.enum(ENGINE_IDS), uiLanguage: z.enum(UI_LANGUAGES).optional() }),
     output: z.object({ ready: z.boolean(), detail: z.string() }),
   },
   downloadEngineModel: {
-    input: z.object({ engine: z.enum(ENGINE_IDS) }),
+    input: z.object({ engine: z.enum(ENGINE_IDS), uiLanguage: z.enum(UI_LANGUAGES).optional() }),
     output: z.object({ ready: z.boolean(), detail: z.string() }),
   },
   diskModels: {
@@ -132,6 +132,10 @@ export const rpcContract = defineRpcContract({
     input: z.object({ engine: z.enum(ENGINE_IDS), model: z.string() }),
     output: z.object({ freedBytes: z.number() }),
   },
+  uiLanguage: {
+    input: z.null(),
+    output: z.object({ uiLanguage: z.string() }),
+  },
   updateSettings: {
     input: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
     output: z.object({ saved: z.boolean() }),
@@ -142,6 +146,7 @@ export const rpcContract = defineRpcContract({
       mimeType: z.string(),
       filename: z.string().optional(),
       prompt: z.string().nullable().optional(),
+      uiLanguage: z.enum(UI_LANGUAGES).optional(),
     }),
     output: z.object({
       ok: z.boolean(),
@@ -199,6 +204,7 @@ export default async function plugin(bb: BbPluginApi) {
       machine: values.machine,
       whisperModel: WHISPER_MODELS[values.whisperModel] ?? WHISPER_MODELS[DEFAULT_WHISPER_MODEL]!,
       language: values.language,
+      uiLanguage: values.uiLanguage,
       vocabulary: values.vocabulary,
       vocabularyRepair: values.vocabularyRepair,
       vocabularyPrompt: values.vocabularyPrompt,
@@ -351,7 +357,8 @@ export default async function plugin(bb: BbPluginApi) {
 
 
   bb.rpc.register(rpcContract, {
-    state: async () => {
+    uiLanguage: async () => ({ uiLanguage: (await readSettings()).uiLanguage }),
+    state: async (input) => {
       let hostId: string;
       try {
         hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
@@ -394,7 +401,7 @@ export default async function plugin(bb: BbPluginApi) {
           supported,
           unsupportedReason: supported
             ? null
-            : `Нужна macOS: на ${identity.platform ?? "этой машине"} модель не запускается. Выберите другую машину или облачный движок.`,
+            : dictionary(input?.uiLanguage ?? values.uiLanguage).system.localUnsupported(identity.platform ?? "unknown"),
         };
       });
       return {
@@ -447,11 +454,11 @@ export default async function plugin(bb: BbPluginApi) {
       }
       return { declared, visible };
     },
-    setupEngine: async ({ engine }) => {
+    setupEngine: async ({ engine, uiLanguage }) => {
       const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const result = await host.call(
         "setup",
-        { engine, reinstall: false },
+        { engine, reinstall: false, uiLanguage },
         { hostId, timeoutMs: SETUP_TIMEOUT_MS },
       );
       bb.realtime.publish("state-changed", { engine });
@@ -492,11 +499,11 @@ export default async function plugin(bb: BbPluginApi) {
       bb.realtime.publish("state-changed", { settings: true });
       return { saved: true };
     },
-    downloadEngineModel: async ({ engine }) => {
+    downloadEngineModel: async ({ engine, uiLanguage }) => {
       const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
       const result = await host.call(
         "downloadModel",
-        { engine },
+        { engine, uiLanguage },
         { hostId, timeoutMs: DOWNLOAD_TIMEOUT_MS },
       );
       bb.realtime.publish("state-changed", { engine });
@@ -516,6 +523,7 @@ export default async function plugin(bb: BbPluginApi) {
     mimeType: string;
     filename?: string;
     prompt?: string | null;
+    uiLanguage?: UiLanguage;
   }) {
     const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
     return await host.call(
@@ -525,6 +533,7 @@ export default async function plugin(bb: BbPluginApi) {
         mimeType: input.mimeType,
         filename: input.filename,
         prompt: input.prompt,
+        uiLanguage: input.uiLanguage,
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
       },
       { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },

@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const es: Dictionary = {
   tabs: { general: "General", dictation: "Dictado", vocabulary: "Vocabulario", cloud: "Nube", data: "Datos" },
-  language: { label: "Idioma de la interfaz" },
+  language: { auto: "Como en BB", label: "Idioma de la interfaz" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Multilingüe y respeta los nombres de herramientas. Opción por defecto." },
@@ -14,6 +14,8 @@ export const es: Dictionary = {
   status: { ready: "listo", notInstalled: "no instalado", needsKey: "falta la clave", broken: "el paquete no se importa", loading: "Cargando…" },
 
   general: {
+    model4bit: "large-v3 4-bit (recomendado)",
+    modelFull: "large-v3 (precisión completa)",
     installEngine: "Instalar el motor",
     installing: "Instalando: tarda unos minutos.",
     whisperModel: "Modelo de Whisper",
@@ -121,5 +123,52 @@ export const es: Dictionary = {
     author: "Autor",
   },
 
-  errors: { machineUnreachable: (reason) => `La máquina de reconocimiento no responde: ${reason}` },
+  voice: {
+    micError: "Error de grabación del micrófono",
+    micFailed: "No se pudo activar el micrófono",
+    micDenied: "El acceso al micrófono está bloqueado en el navegador",
+    micNotFound: "Micrófono no encontrado",
+    tooShort: "Grabación demasiado corta (menos de medio segundo)",
+    notRecognized: "No se pudo reconocer el habla (silencio en la grabación)",
+    timeout: "Tiempo agotado en el reconocimiento de voz (el servidor no respondió en 60 segundos)",
+    movedToChat: (name) => `Voz reconocida y enviada a "${name}"`,
+    pasted: "Voz reconocida e insertada en el chat",
+    originChat: "el chat de origen",
+    chat: "Chat",
+    newChat: "Chat nuevo",
+    cancelRecording: "Cancelar grabación",
+    finishRecording: "Terminar la grabación y reconocer",
+    transcribing: "Reconociendo...",
+    badgeLabel: (title) => `Al chat: "${title}"`,
+    badgeTitle: (title) => `Grabando para el chat "${title}". Haz clic para volver a él.`,
+  },
+  machine: {
+    label: "Máquina de reconocimiento",
+    hint: "Dónde se ejecuta el reconocimiento. Los modelos locales solo funcionan en macOS.",
+    auto: "Automática: la máquina del servidor",
+    cloudOnly: (name) => `${name} (solo motores en la nube)`,
+  },
+
+  system: {
+    cloudSetup: "Los motores en la nube solo necesitan una clave de API en los ajustes. El audio se envía al proveedor.",
+    pythonMissing: "Falta Python 3 en la máquina de reconocimiento. Instálalo y vuelve a intentarlo.",
+    ffmpegMissing: "Falta ffmpeg en la máquina de reconocimiento. Es necesario para decodificar grabaciones del navegador.",
+    engineInstalled: (engine: string) => `${engine} está instalado. El modelo se descargará en la primera transcripción.`,
+    cloudNoModel: "Los motores en la nube no guardan modelos localmente.",
+    modelReady: (engine: string) => `El modelo ${engine} está listo.`,
+    noSpeech: "No se detectó voz (la grabación está en silencio).",
+    transcribeTimeout: "El reconocimiento de voz superó el límite de tiempo.",
+    fileMissing: (path: string) => `Archivo no encontrado en la máquina de reconocimiento: ${path}`,
+    engineMissing: (engine: string) => `${engine} no está instalado. Ejecuta bb voice-input setup.`,
+    daemonFailed: (seconds: number, path: string) => `El servicio de reconocimiento no se inició en ${seconds} segundos. Consulta ${path}.`,
+    downloadTimeout: "La descarga del modelo superó el límite de una hora.",
+    downloadFailed: (code: number | null, detail: string) => `La descarga del modelo falló (código ${code}). ${detail}`,
+    localUnsupported: (platform: string) => `Los modelos locales requieren macOS y no funcionan en ${platform}. Elige otra máquina o un motor en la nube.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `La máquina de reconocimiento no responde: ${reason}`,
+    keyRequired: (engine) => `El motor ${engine} necesita una clave: Ajustes → Entrada de voz → Nube.`,
+    keyEnvMissing: (name) => `La variable ${name} no existe en la máquina de reconocimiento.`,
+  },
 };

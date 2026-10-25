@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const pt: Dictionary = {
   tabs: { general: "Geral", dictation: "Ditado", vocabulary: "Vocabulário", cloud: "Nuvem", data: "Dados" },
-  language: { label: "Idioma da interface" },
+  language: { auto: "Igual ao BB", label: "Idioma da interface" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Multilíngue e preserva nomes de ferramentas. Opção padrão." },
@@ -14,6 +14,8 @@ export const pt: Dictionary = {
   status: { ready: "pronto", notInstalled: "não instalado", needsKey: "falta a chave", broken: "o pacote não importa", loading: "Carregando…" },
 
   general: {
+    model4bit: "large-v3 4-bit (recomendado)",
+    modelFull: "large-v3 (precisão total)",
     installEngine: "Instalar o motor",
     installing: "Instalando — leva alguns minutos.",
     whisperModel: "Modelo do Whisper",
@@ -121,5 +123,52 @@ export const pt: Dictionary = {
     author: "Autor",
   },
 
-  errors: { machineUnreachable: (reason) => `A máquina de reconhecimento está inacessível: ${reason}` },
+  voice: {
+    micError: "Erro de gravação do microfone",
+    micFailed: "Não foi possível ligar o microfone",
+    micDenied: "O acesso ao microfone está bloqueado no navegador",
+    micNotFound: "Microfone não encontrado",
+    tooShort: "Gravação curta demais (menos de meio segundo)",
+    notRecognized: "Não foi possível reconhecer a fala (silêncio na gravação)",
+    timeout: "Tempo esgotado no reconhecimento de fala (o servidor não respondeu em 60 segundos)",
+    movedToChat: (name) => `Voz reconhecida e levada para "${name}"`,
+    pasted: "Fala reconhecida e inserida no chat",
+    originChat: "o chat de origem",
+    chat: "Chat",
+    newChat: "Novo chat",
+    cancelRecording: "Cancelar gravação",
+    finishRecording: "Terminar a gravação e reconhecer",
+    transcribing: "Reconhecendo...",
+    badgeLabel: (title) => `Para o chat: "${title}"`,
+    badgeTitle: (title) => `Gravando para o chat "${title}". Clique para voltar a ele.`,
+  },
+  machine: {
+    label: "Máquina de reconhecimento",
+    hint: "Onde o reconhecimento roda. Modelos locais só funcionam no macOS.",
+    auto: "Automático: a máquina do servidor",
+    cloudOnly: (name) => `${name} (só motores na nuvem)`,
+  },
+
+  system: {
+    cloudSetup: "Motores na nuvem precisam apenas de uma chave de API nas configurações. O áudio é enviado ao provedor.",
+    pythonMissing: "Python 3 não está instalado na máquina de reconhecimento. Instale e tente novamente.",
+    ffmpegMissing: "ffmpeg não está instalado na máquina de reconhecimento. Ele é necessário para decodificar gravações do navegador.",
+    engineInstalled: (engine: string) => `${engine} foi instalado. O modelo será baixado na primeira transcrição.`,
+    cloudNoModel: "Motores na nuvem não armazenam modelos localmente.",
+    modelReady: (engine: string) => `O modelo ${engine} está pronto.`,
+    noSpeech: "Nenhuma fala detectada (a gravação está em silêncio).",
+    transcribeTimeout: "O reconhecimento de fala excedeu o limite de tempo.",
+    fileMissing: (path: string) => `Arquivo não encontrado na máquina de reconhecimento: ${path}`,
+    engineMissing: (engine: string) => `${engine} não está instalado. Execute bb voice-input setup.`,
+    daemonFailed: (seconds: number, path: string) => `O serviço de reconhecimento não iniciou em ${seconds} segundos. Veja ${path}.`,
+    downloadTimeout: "O download do modelo excedeu o limite de uma hora.",
+    downloadFailed: (code: number | null, detail: string) => `O download do modelo falhou (código ${code}). ${detail}`,
+    localUnsupported: (platform: string) => `Modelos locais exigem macOS e não funcionam em ${platform}. Escolha outra máquina ou um motor na nuvem.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `A máquina de reconhecimento está inacessível: ${reason}`,
+    keyRequired: (engine) => `O motor ${engine} precisa de uma chave: Configurações → Entrada de voz → Nuvem.`,
+    keyEnvMissing: (name) => `A variável ${name} não existe na máquina de reconhecimento.`,
+  },
 };

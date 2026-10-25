@@ -19,7 +19,7 @@ export const DEFAULT_WHISPER_MODEL = "large-v3 4-bit (быстрее, реком
 
 export const storedSettingsSchema = z
   .object({
-    uiLanguage: z.enum(UI_LANGUAGES),
+    uiLanguage: z.enum(["auto", ...UI_LANGUAGES]),
     engine: z.enum(ENGINE_IDS),
     /**
      * Машина распознавания: id или имя из списка подключённых. Пусто — та, где
@@ -65,7 +65,7 @@ export const storedSettingsSchema = z
 export type StoredSettings = z.infer<typeof storedSettingsSchema>;
 
 export const DEFAULT_SETTINGS: StoredSettings = {
-  uiLanguage: "en",
+  uiLanguage: "auto",
   engine: "whisper",
   machine: "",
   whisperModel: DEFAULT_WHISPER_MODEL,

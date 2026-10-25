@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const fr: Dictionary = {
   tabs: { general: "Général", dictation: "Dictée", vocabulary: "Lexique", cloud: "Cloud", data: "Données" },
-  language: { label: "Langue de l’interface" },
+  language: { auto: "Comme BB", label: "Langue de l’interface" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Multilingue et fidèle aux noms d’outils. Choix par défaut." },
@@ -14,6 +14,8 @@ export const fr: Dictionary = {
   status: { ready: "prêt", notInstalled: "non installé", needsKey: "clé requise", broken: "le paquet ne s’importe pas", loading: "Chargement…" },
 
   general: {
+    model4bit: "large-v3 4-bit (recommandé)",
+    modelFull: "large-v3 (pleine précision)",
     installEngine: "Installer le moteur",
     installing: "Installation en cours — cela prend quelques minutes.",
     whisperModel: "Modèle Whisper",
@@ -121,5 +123,52 @@ export const fr: Dictionary = {
     author: "Auteur",
   },
 
-  errors: { machineUnreachable: (reason) => `La machine de reconnaissance est injoignable : ${reason}` },
+  voice: {
+    micError: "Erreur d'enregistrement du microphone",
+    micFailed: "Impossible d'activer le microphone",
+    micDenied: "L'accès au microphone est bloqué dans le navigateur",
+    micNotFound: "Microphone introuvable",
+    tooShort: "Enregistrement trop court (moins d’une demi-seconde)",
+    notRecognized: "Impossible de reconnaître la parole (silence dans l'enregistrement)",
+    timeout: "Délai dépassé pour la reconnaissance vocale (le serveur n'a pas répondu en 60 secondes)",
+    movedToChat: (name) => `Voix reconnue et envoyée vers "${name}"`,
+    pasted: "Parole reconnue et insérée dans le chat",
+    originChat: "le chat d'origine",
+    chat: "Chat",
+    newChat: "Nouveau chat",
+    cancelRecording: "Annuler l'enregistrement",
+    finishRecording: "Terminer l'enregistrement et reconnaître",
+    transcribing: "Reconnaissance en cours...",
+    badgeLabel: (title) => `Vers le chat : "${title}"`,
+    badgeTitle: (title) => `Enregistrement pour le chat "${title}". Cliquez pour y revenir.`,
+  },
+  machine: {
+    label: "Machine de reconnaissance",
+    hint: "Où la reconnaissance s'exécute. Les modèles locaux ne fonctionnent que sous macOS.",
+    auto: "Automatique : la machine du serveur",
+    cloudOnly: (name) => `${name} (moteurs cloud uniquement)`,
+  },
+
+  system: {
+    cloudSetup: "Les moteurs cloud nécessitent seulement une clé API dans les réglages. Le son est envoyé au fournisseur.",
+    pythonMissing: "Python 3 est absent de la machine de reconnaissance. Installez-le et réessayez.",
+    ffmpegMissing: "ffmpeg est absent de la machine de reconnaissance. Il est nécessaire pour décoder les enregistrements du navigateur.",
+    engineInstalled: (engine: string) => `${engine} est installé. Le modèle sera téléchargé lors de la première transcription.`,
+    cloudNoModel: "Les moteurs cloud ne stockent pas de modèles localement.",
+    modelReady: (engine: string) => `Le modèle ${engine} est prêt.`,
+    noSpeech: "Aucune parole détectée (l’enregistrement est silencieux).",
+    transcribeTimeout: "La reconnaissance vocale a dépassé le délai imparti.",
+    fileMissing: (path: string) => `Fichier introuvable sur la machine de reconnaissance : ${path}`,
+    engineMissing: (engine: string) => `${engine} n’est pas installé. Exécutez bb voice-input setup.`,
+    daemonFailed: (seconds: number, path: string) => `Le service de reconnaissance n’a pas démarré dans les ${seconds} secondes. Consultez ${path}.`,
+    downloadTimeout: "Le téléchargement du modèle a dépassé la limite d’une heure.",
+    downloadFailed: (code: number | null, detail: string) => `Le téléchargement du modèle a échoué (code ${code}). ${detail}`,
+    localUnsupported: (platform: string) => `Les modèles locaux nécessitent macOS et ne fonctionnent pas sur ${platform}. Choisissez une autre machine ou un moteur cloud.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `La machine de reconnaissance est injoignable : ${reason}`,
+    keyRequired: (engine) => `Le moteur ${engine} nécessite une clé : Réglages → Saisie vocale → Cloud.`,
+    keyEnvMissing: (name) => `La variable ${name} n'existe pas sur la machine de reconnaissance.`,
+  },
 };

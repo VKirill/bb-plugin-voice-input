@@ -28,11 +28,14 @@ import { repairTerms } from "./src/term-repair.js";
 import { runAiPass } from "./src/ai-pass.js";
 import { guardAiPass } from "./src/ai-pass-guard.js";
 import { transcribeGemini, transcribeOpenAi } from "./src/cloud.js";
+import { dictionary } from "./src/i18n/index.js";
 
 const DEFAULT_CONFIG: VoiceConfig = {
   engine: "whisper",
+  machine: "",
   whisperModel: "mlx-community/whisper-large-v3-turbo",
   language: "auto",
+  uiLanguage: "en",
   vocabulary: "",
   vocabularyRepair: true,
   vocabularyPrompt: true,
@@ -269,6 +272,7 @@ async function runTranscription(
 ): Promise<TranscriptionOutcome> {
   const started = Date.now();
   let rawText: string;
+  const words = dictionary(config.uiLanguage).errors;
 
   const entries = parseVocabulary(config.vocabulary);
   const hint = config.vocabularyPrompt
@@ -299,8 +303,8 @@ async function runTranscription(
       if (!key) {
         throw new Error(
           keyEnv
-            ? `Переменной ${keyEnv} нет на машине распознавания.`
-            : `Для движка ${groq ? "Groq" : "OpenAI"} нужен ключ: Настройки → Голосовой ввод → Облако.`,
+            ? words.keyEnvMissing(keyEnv)
+            : words.keyRequired(groq ? "Groq" : "OpenAI"),
         );
       }
       rawText = await transcribeOpenAi(
@@ -316,8 +320,8 @@ async function runTranscription(
       if (!key) {
         throw new Error(
           config.cloud.googleKeyEnv
-            ? `Переменной ${config.cloud.googleKeyEnv} нет на машине распознавания.`
-            : "Для движка Google нужен ключ: Настройки → Голосовой ввод → Облако.",
+            ? words.keyEnvMissing(config.cloud.googleKeyEnv)
+            : words.keyRequired("Google"),
         );
       }
       rawText = await transcribeGemini(
@@ -330,7 +334,7 @@ async function runTranscription(
       );
     }
   } else {
-    await ensureDaemon(paths, config.engine, DAEMON_IDLE_SECONDS);
+    await ensureDaemon(paths, config.engine, DAEMON_IDLE_SECONDS, config.uiLanguage);
     const response = await callDaemon(
       paths,
       config.engine,
@@ -362,7 +366,7 @@ async function runTranscription(
 
   const text = await postprocess(rawText, config, () => {});
   if (!text.trim()) {
-    throw new Error("Речь не обнаружена (тишина на записи)");
+    throw new Error(dictionary(config.uiLanguage).system.noSpeech);
   }
   const outcome: TranscriptionOutcome = {
     engine: config.engine,
@@ -390,14 +394,16 @@ async function executeAudioTranscription(
     audioBase64: string;
     mimeType: string;
     filename?: string;
-    prompt?: string;
+    prompt?: string | null;
     timeoutMs?: number;
+    uiLanguage?: string;
   },
   tempDir: string,
 ): Promise<{ ok: true; model: string; text: string } | { ok: false; code: "timeout" | "request_failed"; message: string }> {
   const config = await readConfigWithSecrets(paths);
+  if (input.uiLanguage) config.uiLanguage = input.uiLanguage;
   const audio = Buffer.from(input.audioBase64, "base64");
-  const extension = extensionFor(input.filename, input.mimeType);
+  const extension = extensionFor(input.filename ?? "recording.webm", input.mimeType);
 
   const savedPath = config.saveRecordings
     ? await keepRecording(paths, audio, extension)
@@ -414,8 +420,8 @@ async function executeAudioTranscription(
     const outcome = await runTranscription(paths, config, {
       audioPath,
       savedPath,
-      prompt: input.prompt,
-      timeoutMs: input.timeoutMs,
+      prompt: input.prompt ?? null,
+      timeoutMs: input.timeoutMs ?? 600_000,
     });
     return { ok: true as const, model: outcome.engine, text: outcome.text };
   } catch (error) {
@@ -424,7 +430,7 @@ async function executeAudioTranscription(
       ok: false as const,
       code: message === "timeout" ? ("timeout" as const) : ("request_failed" as const),
       message:
-        message === "timeout" ? "Распознавание не уложилось в отведённое время" : message,
+        message === "timeout" ? dictionary(config.uiLanguage).system.transcribeTimeout : message,
     };
   }
 }
@@ -481,11 +487,11 @@ export default experimental_defineHostEntry({
       return { applied: true as const };
     },
 
-    setup: async ({ engine, reinstall }, context) => {
+    setup: async ({ engine, reinstall, uiLanguage }, context) => {
       const paths = hostPaths(context.experimental_paths.dataDir);
       // Пакеты движка меняются под демоном — его нужно остановить.
       await stopDaemon(paths, engine);
-      return await setupEngine(paths, engine, reinstall);
+      return await setupEngine(paths, engine, reinstall, uiLanguage ?? (await readConfig(paths)).uiLanguage);
     },
 
     status: async (_input, context) => {
@@ -548,7 +554,7 @@ export default experimental_defineHostEntry({
     "ai.inference.complete": async () => ({
       ok: false as const,
       code: "request_failed" as const,
-      message: "Плагин «Голосовой ввод» обслуживает только транскрипцию.",
+      message: "Voice Input supports transcription only.",
     }),
 
     "ai.voice.transcribe": async (input, context) => {
@@ -565,11 +571,12 @@ export default experimental_defineHostEntry({
       return { ok: false as const, text: "", error: res.message };
     },
 
-    downloadModel: async ({ engine }, context) => {
+    downloadModel: async ({ engine, uiLanguage }, context) => {
       const paths = hostPaths(context.experimental_paths.dataDir);
       const config = await readConfig(paths);
+      const words = dictionary(uiLanguage ?? config.uiLanguage).system;
       if (engine === "openai" || engine === "google" || engine === "groq") {
-        return { ready: true, detail: "Облачный движок моделей не хранит." };
+        return { ready: true, detail: words.cloudNoModel };
       }
       // Скрипт загрузки живёт в бандле хоста: раскладываем его рядом с окружением.
       await materializePython(paths);
@@ -585,11 +592,11 @@ export default experimental_defineHostEntry({
             state: event.event === "progress" ? "downloading" : event.event === "done" ? "done" : "error",
             message: event.event === "error" ? event.message : null,
           });
-        });
+        }, uiLanguage ?? config.uiLanguage);
       } finally {
         lease.dispose();
       }
-      return { ready: true, detail: `Модель движка «${engine}» готова.` };
+      return { ready: true, detail: words.modelReady(engine) };
     },
 
     listModels: async (_input, context) => {
@@ -617,7 +624,7 @@ export default experimental_defineHostEntry({
       const paths = hostPaths(context.experimental_paths.dataDir);
       const config = await readConfigWithSecrets(paths);
       if (!existsSync(path)) {
-        throw new Error(`Файл не найден на машине распознавания: ${path}`);
+        throw new Error(dictionary(config.uiLanguage).system.fileMissing(path));
       }
       return await runTranscription(paths, config, {
         audioPath: path,

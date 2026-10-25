@@ -2,7 +2,7 @@ import type { Dictionary } from "./types.ts";
 
 export const de: Dictionary = {
   tabs: { general: "Allgemein", dictation: "Diktat", vocabulary: "Wörterbuch", cloud: "Cloud", data: "Daten" },
-  language: { label: "Sprache der Oberfläche" },
+  language: { auto: "Wie BB", label: "Sprache der Oberfläche" },
 
   engines: {
     whisper: { title: "Whisper (MLX)", hint: "Mehrsprachig und lässt Werkzeugnamen unangetastet. Voreinstellung." },
@@ -14,6 +14,8 @@ export const de: Dictionary = {
   status: { ready: "bereit", notInstalled: "nicht installiert", needsKey: "Schlüssel fehlt", broken: "Paket lässt sich nicht importieren", loading: "Lade…" },
 
   general: {
+    model4bit: "large-v3 4-bit (empfohlen)",
+    modelFull: "large-v3 (volle Genauigkeit)",
     installEngine: "Engine installieren",
     installing: "Installation läuft — das dauert Minuten.",
     whisperModel: "Whisper-Modell",
@@ -121,5 +123,52 @@ export const de: Dictionary = {
     author: "Autor",
   },
 
-  errors: { machineUnreachable: (reason) => `Der Erkennungsrechner ist nicht erreichbar: ${reason}` },
+  voice: {
+    micError: "Fehler bei der Mikrofonaufnahme",
+    micFailed: "Mikrofon konnte nicht aktiviert werden",
+    micDenied: "Der Mikrofonzugriff ist im Browser blockiert",
+    micNotFound: "Mikrofon nicht gefunden",
+    tooShort: "Aufnahme zu kurz (unter einer halben Sekunde)",
+    notRecognized: "Sprache konnte nicht erkannt werden (Stille in der Aufnahme)",
+    timeout: "Zeitüberschreitung bei der Spracherkennung (der Server hat nicht innerhalb von 60 Sekunden geantwortet)",
+    movedToChat: (name) => `Sprache erkannt und in "${name}" übernommen`,
+    pasted: "Sprache erkannt und in den Chat eingefügt",
+    originChat: "der ursprüngliche Chat",
+    chat: "Chat",
+    newChat: "Neuer Chat",
+    cancelRecording: "Aufnahme abbrechen",
+    finishRecording: "Aufnahme beenden und erkennen",
+    transcribing: "Erkennung läuft...",
+    badgeLabel: (title) => `In den Chat: "${title}"`,
+    badgeTitle: (title) => `Aufnahme für den Chat "${title}". Klicken, um dorthin zurückzukehren.`,
+  },
+  machine: {
+    label: "Erkennungsrechner",
+    hint: "Wo die Erkennung läuft. Lokale Modelle funktionieren nur unter macOS.",
+    auto: "Automatisch: der Serverrechner",
+    cloudOnly: (name) => `${name} (nur Cloud-Engines)`,
+  },
+
+  system: {
+    cloudSetup: "Cloud-Engines benötigen nur einen API-Schlüssel in den Einstellungen. Audio wird an den Anbieter gesendet.",
+    pythonMissing: "Python 3 fehlt auf dem Erkennungsrechner. Installieren Sie es und versuchen Sie es erneut.",
+    ffmpegMissing: "ffmpeg fehlt auf dem Erkennungsrechner. Es wird zum Dekodieren von Browseraufnahmen benötigt.",
+    engineInstalled: (engine: string) => `${engine} ist installiert. Das Modell wird bei der ersten Transkription heruntergeladen.`,
+    cloudNoModel: "Cloud-Engines speichern keine lokalen Modelle.",
+    modelReady: (engine: string) => `Das Modell ${engine} ist bereit.`,
+    noSpeech: "Keine Sprache erkannt (die Aufnahme ist stumm).",
+    transcribeTimeout: "Die Spracherkennung hat das Zeitlimit überschritten.",
+    fileMissing: (path: string) => `Datei auf dem Erkennungsrechner nicht gefunden: ${path}`,
+    engineMissing: (engine: string) => `${engine} ist nicht installiert. Führen Sie bb voice-input setup aus.`,
+    daemonFailed: (seconds: number, path: string) => `Der Erkennungsdienst ist nicht innerhalb von ${seconds} Sekunden gestartet. Siehe ${path}.`,
+    downloadTimeout: "Der Modelldownload hat das Zeitlimit von einer Stunde überschritten.",
+    downloadFailed: (code: number | null, detail: string) => `Der Modelldownload ist fehlgeschlagen (Code ${code}). ${detail}`,
+    localUnsupported: (platform: string) => `Lokale Modelle benötigen macOS und funktionieren nicht unter ${platform}. Wählen Sie einen anderen Rechner oder eine Cloud-Engine.`,
+  },
+
+  errors: {
+    machineUnreachable: (reason) => `Der Erkennungsrechner ist nicht erreichbar: ${reason}`,
+    keyRequired: (engine) => `Für die Engine ${engine} ist ein Schlüssel nötig: Einstellungen → Spracheingabe → Cloud.`,
+    keyEnvMissing: (name) => `Die Variable ${name} existiert auf dem Erkennungsrechner nicht.`,
+  },
 };

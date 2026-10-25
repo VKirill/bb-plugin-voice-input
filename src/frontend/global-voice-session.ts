@@ -11,6 +11,7 @@ import {
   insertTranscriptAtCaret,
   resolveComposerInsertOffset,
 } from "./composer-insert.ts";
+import { frontendLanguage, words } from "./words.ts";
 
 export type VoiceRecordingState = "idle" | "recording" | "transcribing" | "error";
 
@@ -36,6 +37,7 @@ export type TranscribeFunction = (args: {
   mimeType: string;
   filename: string;
   prompt?: string | null;
+  uiLanguage?: string;
 }) => Promise<{ ok: boolean; text: string; error: string | null }>;
 
 function resolveAudioMimeType(): string {
@@ -202,7 +204,7 @@ export class GlobalVoiceSession {
   }
 
   public updateTargetTitle(title: string) {
-    if (this.snapshot.target && (!this.snapshot.target.threadTitle || this.snapshot.target.threadTitle === "Чат")) {
+    if (this.snapshot.target && !this.snapshot.target.threadTitle) {
       this.updateSnapshot({
         target: { ...this.snapshot.target, threadTitle: title },
       });
@@ -266,7 +268,7 @@ export class GlobalVoiceSession {
       };
 
       recorder.onerror = () => {
-        const msg = "Ошибка записи с микрофона";
+        const msg = words().voice.micError;
         toast.error(msg);
         this.cleanupAudio();
         this.updateSnapshot({ state: "idle", error: msg });
@@ -317,12 +319,12 @@ export class GlobalVoiceSession {
       return true;
     } catch (err) {
       this.cleanupAudio();
-      let errorMsg = "Не удалось включить микрофон";
+      let errorMsg = words().voice.micFailed;
       if (err instanceof DOMException) {
         if (err.name === "NotAllowedError" || err.name === "SecurityError") {
-          errorMsg = "Доступ к микрофону заблокирован в браузере";
+          errorMsg = words().voice.micDenied;
         } else if (err.name === "NotFoundError") {
-          errorMsg = "Микрофон не найден";
+          errorMsg = words().voice.micNotFound;
         } else {
           errorMsg = err.message || errorMsg;
         }
@@ -372,7 +374,7 @@ export class GlobalVoiceSession {
 
     if (duration < 500 || this.recordedChunks.length === 0) {
       this.updateSnapshot({ state: "idle", target: null });
-      toast.error("Запись слишком короткая (менее одной секунды)");
+      toast.error(words().voice.tooShort);
       return;
     }
 
@@ -415,6 +417,7 @@ export class GlobalVoiceSession {
         mimeType: this.mimeType,
         filename: `recording.${ext}`,
         prompt: currentTarget?.promptContext ?? null,
+        uiLanguage: frontendLanguage(),
       });
 
       const payload: Record<string, unknown> =
@@ -436,7 +439,7 @@ export class GlobalVoiceSession {
       this.updateSnapshot({ state: "idle", target: null });
 
       if (!isOk || !text) {
-        toast.error(errorMessage || "Не удалось распознать речь (тишина на записи)");
+        toast.error(errorMessage || words().voice.notRecognized);
         return;
       }
 
@@ -445,7 +448,7 @@ export class GlobalVoiceSession {
       this.updateSnapshot({ state: "idle", target: null });
       const msg =
         err instanceof DOMException && err.name === "AbortError"
-          ? "Таймаут распознавания речи (сервер не ответил за 60 секунд)"
+          ? words().voice.timeout
           : err instanceof Error
             ? err.message
             : String(err);
@@ -526,8 +529,8 @@ export class GlobalVoiceSession {
     if (!isCurrentlyInTarget) {
       this.persistDraftInsert(target, text, offset);
 
-      const targetName = target.threadTitle || "исходный чат";
-      toast.success(`Голос распознан и перенесён в «${targetName}»`);
+      const targetName = target.threadTitle || words().voice.originChat;
+      toast.success(words().voice.movedToChat(targetName));
 
       if (target.originPath) {
         window.history.pushState(null, "", target.originPath);
@@ -560,7 +563,7 @@ export class GlobalVoiceSession {
       } else {
         this.persistDraftInsert(target, text, offset);
       }
-      toast.success("Речь распознана и вставлена в чат");
+      toast.success(words().voice.pasted);
     }
   }
 
