@@ -215,7 +215,7 @@ export function configFromKeyboardEvent(event: HotkeyKeyEvent): VoiceHotkeyConfi
 
 export type PttMode = "idle" | "holding" | "pending" | "latched";
 
-export type PttAction = "start" | "stop" | "none";
+export type PttAction = "start" | "stop" | "cancel" | "none";
 
 export type PttState = {
   mode: PttMode;
@@ -262,11 +262,27 @@ export function pttKeyUp(state: PttState, now: number): { state: PttState; actio
   };
 }
 
+/**
+ * Одно короткое нажатие без второго — это случайное касание (на Windows Alt жмут
+ * постоянно: Alt+Tab, Alt+Shift, AltGr). Запись отменяется без распознавания.
+ */
 export function pttTimerFired(state: PttState, now: number): { state: PttState; action: PttAction } {
   if (state.mode !== "pending" || state.stopAt === null || now < state.stopAt) {
     return { state, action: "none" };
   }
-  return { state: createPttState(), action: "stop" };
+  return { state: createPttState(), action: "cancel" };
+}
+
+/**
+ * Другая клавиша или уход из окна, пока клавиша диктовки зажата или ждёт второго
+ * нажатия: это сочетание (Alt+Tab, Alt+Shift, AltGr+буква), а не диктовка.
+ * Закреплённую двойным нажатием запись не трогает.
+ */
+export function pttInterrupted(state: PttState): { state: PttState; action: PttAction } {
+  if (state.mode === "holding" || state.mode === "pending") {
+    return { state: createPttState(), action: "cancel" };
+  }
+  return { state, action: "none" };
 }
 
 export function publishHotkeyConfig(config: VoiceHotkeyConfig): void {

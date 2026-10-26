@@ -7,11 +7,11 @@ import { rememberComposerCaretFromDocument } from "./composer-insert.ts";
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
 import { loadFrontendLanguage, observeFrontendLanguage, subscribeFrontendLanguage, words } from "./words.ts";
 import {
-  HOLD_MS,
   HOTKEY_EVENT,
   createPttState,
   eventMatchesHotkey,
   hotkeyFromSettings,
+  pttInterrupted,
   pttKeyDown,
   pttKeyUp,
   pttTimerFired,
@@ -269,7 +269,11 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let pttState: PttState = createPttState();
   let pttTimer: number | null = null;
 
-  const applyPttAction = (action: "start" | "stop" | "none") => {
+  const applyPttAction = (action: "start" | "stop" | "cancel" | "none") => {
+    if (action === "cancel") {
+      if (globalVoiceSession.getSnapshot().state === "recording") globalVoiceSession.cancelRecording();
+      return;
+    }
     if (action === "start") {
       const snapshot = globalVoiceSession.getSnapshot();
       if (snapshot.state === "idle") {
@@ -304,10 +308,21 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }, delayMs);
   };
 
+  const interruptPtt = () => {
+    const next = pttInterrupted(pttState);
+    if (next.action === "none") return;
+    pttState = next.state;
+    clearPttTimer();
+    applyPttAction(next.action);
+  };
+
   const onHotkeyDown = (event: KeyboardEvent) => {
     if (document.documentElement.dataset.bbVoiceHotkeyCapture === "1") return;
     if (event.repeat) return;
-    if (!eventMatchesHotkey(event, hotkeyConfig)) return;
+    if (!eventMatchesHotkey(event, hotkeyConfig)) {
+      interruptPtt();
+      return;
+    }
     if (shouldIgnoreTypingTarget(hotkeyConfig, event.target as { closest?: (selector: string) => unknown } | null)) {
       return;
     }
@@ -374,13 +389,9 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     rememberComposerCaretFromDocument();
   };
 
-  const onWindowBlur = () => {
-    if (pttState.mode !== "holding") return;
-    const next = pttKeyUp(pttState, Date.now() + HOLD_MS);
-    pttState = next.state;
-    clearPttTimer();
-    applyPttAction(next.action === "none" ? "stop" : next.action);
-  };
+  // Окно потеряло фокус с зажатой клавишей диктовки — почти всегда Alt+Tab
+  // (Cmd+Tab): это переключение окон, не диктовка.
+  const onWindowBlur = interruptPtt;
 
   window.addEventListener("pointerdown", handleMicTrigger, { capture: true, signal });
   window.addEventListener("click", handleMicTrigger, { capture: true, signal });

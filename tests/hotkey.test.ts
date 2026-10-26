@@ -14,6 +14,7 @@ import {
   pttKeyDown,
   pttKeyUp,
   pttTimerFired,
+  pttInterrupted,
   shouldIgnoreTypingTarget,
 } from "../src/frontend/hotkey.ts";
 
@@ -78,11 +79,29 @@ test("двойное короткое нажатие ставит защёлку
   assert.equal(third.state.mode, "idle");
 });
 
-test("одно короткое нажатие без второго останавливается по таймеру", () => {
+test("одно короткое нажатие без второго отменяет запись без распознавания", () => {
   const firstDown = pttKeyDown(createPttState(), 1000);
   const firstUp = pttKeyUp(firstDown.state, 1100);
   const later = pttTimerFired(firstUp.state, 1100 + DOUBLE_TAP_MS);
-  assert.equal(later.action, "stop");
+  assert.equal(later.action, "cancel");
+  assert.equal(later.state.mode, "idle");
+});
+
+test("другая клавиша при зажатой клавише диктовки (Alt+Tab, Alt+Shift) отменяет запись", () => {
+  const down = pttKeyDown(createPttState(), 1000);
+  const chord = pttInterrupted(down.state);
+  assert.equal(chord.action, "cancel");
+  assert.equal(chord.state.mode, "idle");
+  const pending = pttKeyUp(pttKeyDown(createPttState(), 1000).state, 1100);
+  assert.equal(pttInterrupted(pending.state).action, "cancel");
+});
+
+test("закреплённую двойным нажатием запись другие клавиши не прерывают", () => {
+  const firstUp = pttKeyUp(pttKeyDown(createPttState(), 1000).state, 1080);
+  const latched = pttKeyDown(firstUp.state, 1160);
+  assert.equal(latched.state.mode, "latched");
+  assert.equal(pttInterrupted(latched.state).action, "none");
+  assert.equal(pttInterrupted(createPttState()).action, "none");
 });
 
 test("буква без модификатора в поле ввода игнорируется", () => {
