@@ -2,9 +2,9 @@
 title: BB Voice Input — Overview
 type: overview
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-27
 status: active
-confidence: low
+confidence: medium
 tags: [voice-input, overview, bb-plugin]
 sources:
   - package.json
@@ -13,6 +13,8 @@ sources:
   - app.tsx
   - src/contract.ts
   - src/frontend/global-voice-session.ts
+  - src/frontend/words.ts
+  - src/i18n/index.ts
   - src/settings-store.ts
   - src/paths.ts
   - python/voiced.py
@@ -25,16 +27,16 @@ TL;DR: BB Voice Input is a BB plugin that records speech in the browser and send
 
 ## What it is
 
-The package registers a BB AI service named `local-voice`, a plugin settings page, and the `bb voice-input` CLI command group (`package.json:1-27`, `server.ts:534-591`). The browser owns microphone capture and draft insertion; transcription runs on the selected host through the host contract (`src/frontend/global-voice-session.ts:212-260`, `src/contract.ts:89-210`).
+The package registers a BB AI service named `local-voice`, a plugin settings page, and the `bb voice-input` CLI command group (`package.json:1-27`, `server.ts:534-591`). The browser owns microphone capture and draft insertion; transcription runs on the selected host through the host contract (`src/frontend/global-voice-session.ts:212-260`, `src/contract.ts:89-210`). The interface has eight dictionaries, follows BB's document language in `auto` mode, and resolves regional language codes to their base language (`src/i18n/index.ts:13-35`, `src/frontend/words.ts:7-10`).
 
 Transcription engines are local Whisper and GigaAM, or cloud Groq, OpenAI, and Google. Local engines use isolated Python virtual environments on the recognition host. Cloud engines send audio to the selected provider (`src/paths.ts:24-38`, `host.ts:278-351`). Vocabulary prompting, deterministic cleanup, and an optional constrained AI pass run in the host transcription pipeline (`host.ts:192-229`, `host.ts:273-275`).
 
 ## Stack
 
 - TypeScript with Node.js APIs; the package is an ES module (`package.json:1-5`).
-- BB Plugin SDK `0.4.87` (`package.json:11-14`).
-- Zod `^4.3.6` for RPC and settings validation (`package.json:14-16`).
-- React UI and Radix components; TypeScript `^5.7.0` is a development dependency (`package.json:16-30`).
+- BB Plugin SDK `0.4.87` (`package.json:22-28`).
+- Zod `^4.6.7` for RPC and settings validation (`package.json:22-28`).
+- React UI and Radix components; TypeScript `^5.7.0` is a development dependency (`package.json:22-40`).
 - Python transcription workers: `mlx-whisper` or GigaAM with Torch for local engines (`src/paths.ts:24-38`).
 
 ## Main parts
