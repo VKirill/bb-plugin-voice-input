@@ -2,7 +2,7 @@
 title: Dictation
 type: component
 created: 2026-10-01
-updated: 2026-10-17
+updated: 2026-10-27
 status: active
 confidence: high
 tags: [dictation, browser, composer]
@@ -31,13 +31,26 @@ Dictation adds a recording panel and hotkey control to BB's composer. The single
 5. On success, the transcript is inserted at the live or remembered caret. If the user navigated away, the original draft in localStorage is updated, BB is navigated back to the target, and the live editor is repaired after a 350 ms delay if needed (`src/frontend/global-voice-session.ts:511-565`).
 6. Audio tracks, timers, the analyser, and the wake lock are released on completion or cancellation (`src/frontend/global-voice-session.ts:567-606`).
 
+### Global session states and outcomes
+
+`GlobalVoiceSession` owns one cached snapshot (`idle`, `recording`, `transcribing`, or `error`), media resources, target, and subscribers. `startRecording` refuses while recording/transcribing; otherwise it resets chunks and asks for microphone access, chooses the first supported MIME type, creates a recorder and optional analyser, and starts duration/level updates. Permission or recorder failures clean resources, set an error, and return to idle. `stopAndTranscribe` only acts from recording, waits for recorder stop or 1.5 seconds, then rejects captures under 500 ms or without chunks. It calls an injected transcriber when available, otherwise the browser RPC with a 60-second abort; successful non-empty text goes to draft delivery, while a failed/empty response or exception returns idle and shows an error toast (`src/frontend/global-voice-session.ts:107-153`, `src/frontend/global-voice-session.ts:214-337`, `src/frontend/global-voice-session.ts:340-457`).
+
+### Interceptor mounting and teardown
+
+`mountVoiceInputInterceptor` installs delegated pointer/click and keyboard handlers, reads UI language and hotkey settings, and subscribes to session changes. Microphone events are prevented and debounced for 350 ms; hotkey events are ignored during settings capture/repeat, and nonmatching keys interrupt a pending/held push-to-talk state. Session updates create or remove the recording bar, synchronize it to the current prompt box or a floating position, and start/stop the waveform. The returned disposer removes listeners, restores patched history methods, unsubscribes observers, and clears timers/animation resources (`src/frontend/voice-interceptor.ts:188-252`, `src/frontend/voice-interceptor.ts:268-349`, `src/frontend/voice-interceptor.ts:396-407`, `src/frontend/voice-interceptor.ts:526-604`, `src/frontend/voice-interceptor.ts:854-908`).
+
+### Push-to-talk key-down transition
+
+`pttKeyDown` maps `latched` to `stop` and a fresh idle/pending state to `holding` plus `start`; a second key-down in `pending` within 420 ms changes to `latched` without another action. Key-down while already `holding` is ignored. Thus timeout/interruption cancellation is handled by the companion timer/interruption functions, not by this transition (`src/frontend/hotkey.ts:231-245`, `src/frontend/hotkey.ts:269-285`).
+
 ## Modes
 
 | Trigger/state | Behavior | Evidence |
 |---|---|---|
 | Composer mic click | Stops the original button event and toggles start/stop; duplicate triggers within 350 ms are ignored (`src/frontend/voice-interceptor.ts:234-249`). | `src/frontend/voice-interceptor.ts:234-249` |
-| Hold hotkey | Holding starts recording; release stops it after the hold threshold (`src/frontend/hotkey.ts:1-7`, `src/frontend/hotkey.ts:231-278`). | `src/frontend/hotkey.ts:231-278` |
-| Double tap / latched | A second press within 420 ms latches recording; another press stops it (`src/frontend/hotkey.ts:6-7`, `src/frontend/hotkey.ts:231-260`). | `src/frontend/hotkey.ts:231-260` |
+| Hold hotkey | Press starts recording; release after 280 ms stops it. A short release enters a pending state for 420 ms (`src/frontend/hotkey.ts:6-8`, `src/frontend/hotkey.ts:231-262`). | `src/frontend/hotkey.ts:231-262` |
+| Double tap / latched | A second press within 420 ms latches recording; another press stops it (`src/frontend/hotkey.ts:231-245`). | `src/frontend/hotkey.ts:231-245` |
+| Short tap / cancel | If no second press arrives during the pending interval, the recording is cancelled without transcription. Another key or window blur cancels a holding or pending recording; a latched recording is unaffected (`src/frontend/hotkey.ts:269-285`). | `src/frontend/hotkey.ts:269-285` |
 | Cancel | Clears captured chunks and resets state without submitting audio (`src/frontend/global-voice-session.ts:567-571`). | `src/frontend/global-voice-session.ts:567-571` |
 | Target remains open | Inserts into the current composer and persists the matching draft text (`src/frontend/global-voice-session.ts:514-525`, `src/frontend/global-voice-session.ts:557-564`). | `src/frontend/global-voice-session.ts:514-564` |
 | User navigated away | Updates the origin draft, returns to its route/thread, then reconciles the editor (`src/frontend/global-voice-session.ts:526-555`). | `src/frontend/global-voice-session.ts:526-555` |
@@ -48,14 +61,14 @@ Microphone clicks and hotkey actions share `toggleVoiceRecording`: a recording s
 
 - Only a microphone control located in or explicitly marked for the prompt box is intercepted; the recording panel's own buttons are excluded (`src/frontend/voice-interceptor.ts:33-49`).
 - The default hotkey is right Option (`AltRight`) with no additional modifiers; presets include left Option, left/right Command, and Control (`src/frontend/hotkey.ts:18-43`).
-- Hotkey state has four modes: `idle`, `holding`, `pending`, and `latched`. A press starts immediately; release before 280 ms waits 420 ms for a second press, while release after 280 ms stops. A second press within that window latches recording; pressing again while latched stops (`src/frontend/hotkey.ts:4-7`, `src/frontend/hotkey.ts:227-271`).
+- Hotkey state has four modes: `idle`, `holding`, `pending`, and `latched`. A press starts immediately; release before 280 ms waits 420 ms for a second press, and timeout cancels the capture without recognition. Release after 280 ms stops. A second press within the pending window latches recording; pressing again while latched stops (`src/frontend/hotkey.ts:4-8`, `src/frontend/hotkey.ts:227-285`).
 - Non-modifier hotkeys without Alt, Control, or Command are ignored in input, textarea, select, and contenteditable targets; modifier-only and function-key bindings bypass that typing-target check (`src/frontend/hotkey.ts:188-202`).
-- The configured hotkey is ignored while the settings page captures a key and while a key event repeats (`src/frontend/voice-interceptor.ts:304-308`).
+- The configured hotkey handler returns without acting while the settings page captures a key or the browser marks the event as a repeat (`src/frontend/voice-interceptor.ts:319-322`).
 - The settings page's key capture ends after 8 seconds; Escape cancels, Tab is ignored, and repeated keydown events are skipped (`app.tsx:356-381`).
 - Composer insertion trims the transcript, clamps the requested offset to the current draft length, and adds a separating space next to non-whitespace text (`src/frontend/composer-insert.ts:22-43`).
 - A session cannot start while recording or transcribing (`src/frontend/global-voice-session.ts:212-215`).
 - Captures shorter than 500 ms or with no recorded chunks are discarded (`src/frontend/global-voice-session.ts:373-377`).
-- `app.tsx` publishes changed hotkey settings to browser storage/event state after successful setting saves (`app.tsx:456-460`, `app.tsx:482-497`).
+- After `updateSettings` resolves successfully, `app.tsx` publishes hotkey configuration only when the saved patch includes a hotkey field (`app.tsx:498-517`).
 
 ## Public API
 

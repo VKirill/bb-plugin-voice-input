@@ -2,9 +2,9 @@
 title: Decisions
 type: decisions
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-27
 status: active
-confidence: high
+confidence: medium
 tags: [decisions, storage, compatibility]
 sources:
   - server.ts

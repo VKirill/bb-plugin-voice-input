@@ -1,6 +1,6 @@
 ---
 title: BB Voice Input — Project Facts
-updated: 2026-10-17
+updated: 2026-10-27
 sources:
   - package.json
   - README.md
@@ -20,6 +20,8 @@ sources:
   - src/embedded-assets.generated.ts
   - src/ai-service-compat.ts
   - src/frontend/hotkey.ts
+  - src/frontend/words.ts
+  - src/i18n/index.ts
   - src/frontend/composer-insert.ts
   - src/cleanup.ts
   - src/term-repair.ts
@@ -30,13 +32,13 @@ sources:
 
 ## Identity
 
-- BB plugin package `bb-plugin-voice-input`, version `0.2.8` (`package.json:1-5`).
+- BB plugin package `bb-plugin-voice-input`, version `0.2.12` (`package.json:1-5`).
 - Registers the `local-voice` AI service, plugin page, and `voice-input` CLI group (`package.json:17-27`, `server.ts:534-591`).
 - Recognition engines: local Whisper/GigaAM; cloud Groq/OpenAI/Google (`src/contract.ts:8-9`).
 
 ## Entry points
 
-- Plugin server: `server.ts`; registers settings RPC, AI service, CLI (`server.ts:353-591`).
+- Plugin server: `plugin()` in `server.ts`; registers page RPC handlers, AI service, and CLI (`server.ts:159-218`, `server.ts:359-519`, `server.ts:543-591`).
 - Host entry: `host.ts`; handles management RPC and voice transcription (`host.ts:432-557`).
 - Settings page: `app.tsx`; uses `rpcContract` (`app.tsx:431-469`).
 - Browser dictation: `src/frontend/voice-interceptor.ts`, `src/frontend/global-voice-session.ts` (`src/frontend/voice-interceptor.ts:187-249`, `src/frontend/global-voice-session.ts:105-164`).
@@ -48,13 +50,14 @@ sources:
 - API key values are excluded from server-pushed config and stored on the recognition host with mode `0600` (`server.ts:194-230`, `src/secret-store.ts:36-53`).
 - Config changes stop local daemons no longer matching the selected engine/model (`host.ts:465-481`).
 - Transcription output is vocabulary-repaired, cleaned, optionally guarded after an AI pass, then recorded in JSONL history (`host.ts:192-229`, `host.ts:363-384`).
-- Browser dictation toggles between starting an idle session and stopping a recording; short hotkey presses wait for a second press before stopping (`src/frontend/voice-interceptor.ts:148-155`, `src/frontend/hotkey.ts:231-271`).
+- Browser dictation toggles between starting an idle session and stopping a recording. A short hotkey press waits for a second press; if none arrives within 420 ms, it cancels without transcription (`src/frontend/voice-interceptor.ts:148-158`, `src/frontend/hotkey.ts:231-274`).
+- Interface text resolves BB's regional language code to one of eight dictionaries; unsupported codes use English (`src/frontend/words.ts:7-10`, `src/i18n/index.ts:13-35`).
 - Details and rationale: [Architecture](docs/architecture.md), [Data model](docs/data-model.md).
 
 ## Conventions
 
 - Shared contracts and settings validation live in `src/contract.ts` and `src/settings-store.ts` (`src/contract.ts:8-210`, `src/settings-store.ts:20-143`).
-- Python assets are embedded by `scripts/embed-assets.mjs` into `EMBEDDED_ASSETS`; the host writes `.py` assets before starting a daemon (`package.json:31-36`, `scripts/embed-assets.mjs:8-29`, `src/embedded-assets.generated.ts:3-8`, `src/daemon.ts:32-39`).
+- Python assets are embedded by `scripts/embed-assets.mjs` into `EMBEDDED_ASSETS`; the host writes `.py` assets before starting a daemon (`package.json:57-60`, `scripts/embed-assets.mjs:8-29`, `src/embedded-assets.generated.ts:3-8`, `src/daemon.ts:32-39`).
 - AI voice-service registration tries the declaration shapes in `src/ai-service-compat.ts` order and throws the last registration error if all fail (`src/ai-service-compat.ts:1-27`).
 - Keep API keys out of settings RPC responses; expose configured flags only (`server.ts:410-416`, `src/contract.ts:81-86`).
 - Project docs are in `docs/`; feature behavior belongs in the relevant `docs/features/` page.
@@ -71,9 +74,9 @@ sources:
 | Command | Purpose |
 |---|---|
 | `npm ci` | Install locked package dependencies. |
-| `npm run build` | Embed Python assets and build BB plugin bundles (`package.json:31-36`). |
-| `npm run typecheck` | Run TypeScript compiler without emitting output (`package.json:31-36`). |
-| `npm test` | Run `node --test tests/*.test.ts` (`package.json:31-36`). |
+| `npm run build` | Embed Python assets and build BB plugin bundles (`package.json:57-60`). |
+| `npm run typecheck` | Run TypeScript compiler without emitting output (`package.json:60`). |
+| `npm test` | Run `node --test tests/*.test.ts` (`package.json:61`). |
 | `bb plugin install .` | Install this checkout in BB (`README.md:7-15`). |
 | `bb voice-input status` | Inspect recognition host and engine state (`server.ts:610-629`). |
 | `bb voice-input setup` | Set up the configured engine (`server.ts:632-645`). |
