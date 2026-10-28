@@ -59,6 +59,12 @@ export const storedSettingsSchema = z
     hotkeyCtrl: z.boolean(),
     hotkeyShift: z.boolean(),
     hotkeyMeta: z.boolean(),
+    hotkeyWinEnabled: z.boolean(),
+    hotkeyWinCode: z.string(),
+    hotkeyWinAlt: z.boolean(),
+    hotkeyWinCtrl: z.boolean(),
+    hotkeyWinShift: z.boolean(),
+    hotkeyWinMeta: z.boolean(),
   })
   .strict();
 
@@ -100,6 +106,12 @@ export const DEFAULT_SETTINGS: StoredSettings = {
     hotkeyCtrl: false,
     hotkeyShift: false,
     hotkeyMeta: false,
+    hotkeyWinEnabled: true,
+    hotkeyWinCode: "ControlRight",
+    hotkeyWinAlt: false,
+    hotkeyWinCtrl: false,
+    hotkeyWinShift: false,
+    hotkeyWinMeta: false,
   };
 
 /**

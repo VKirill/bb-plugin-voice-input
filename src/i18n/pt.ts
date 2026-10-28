@@ -35,7 +35,7 @@ export const pt: Dictionary = {
     fillersHint: "Uma palavra real alongada é endireitada em vez de apagada.",
     quotes: "Ajustar aspas e espaços",
     quotesHint: "Aspas retas viram tipográficas e os espaços sobrando somem.",
-    hotkey: "Atalho de ditado",
+    hotkey: "Atalho de ditado no macOS",
     hotkeyHint: "Segure para gravar, solte para parar. Toque duplo continua até outro toque ou o visto.",
     hotkeyFnNote:
       "O navegador não vê Fn / Globe no Mac, por isso não está na lista. Predefinição: Option direito, como no Voica. Um MacBook tem um Control, à esquerda.",
@@ -48,6 +48,15 @@ export const pt: Dictionary = {
     hotkeyPresetMetaRight: "⌘ Command direito",
     hotkeyPresetMetaLeft: "⌘ Command esquerdo",
     hotkeyPresetCtrl: "⌃ Control",
+    hotkeyWindows: "Atalho no Windows (app BB)",
+    hotkeyWindowsHint:
+      "Na app BB para Windows. Predefinição: Ctrl direito. Segure para gravar, solte para parar. Toque duplo continua até outro toque ou o visto.",
+    hotkeyPresetWinCtrlRight: "Ctrl direito",
+    hotkeyPresetWinCtrlLeft: "Ctrl esquerdo",
+    hotkeyPresetWinAltRight: "Alt direito",
+    hotkeyPresetWinAltLeft: "Alt esquerdo",
+    hotkeyPresetWinCapsLock: "Caps Lock",
+    hotkeyPresetWinF8: "F8",
   },
 
   vocabulary: {

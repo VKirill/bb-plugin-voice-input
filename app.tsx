@@ -16,12 +16,14 @@ import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
 import { frontendLanguage, setFrontendLanguage, subscribeFrontendLanguage, words } from "./src/frontend/words";
 import {
   HOTKEY_PRESETS,
+  WINDOWS_HOTKEY_PRESETS,
   configFromKeyboardEvent,
   formatHotkey,
   hotkeyFromSettings,
   hotkeySelectValue,
   hotkeyToSettings,
   publishHotkeyConfig,
+  type HotkeyPlatform,
   type VoiceHotkeyConfig,
 } from "./src/frontend/hotkey";
 
@@ -347,10 +349,20 @@ function HotkeySettings({
   t,
   config,
   onChange,
+  presets,
+  platform,
+  title,
+  hint,
+  note,
 }: {
   t: Dictionary;
   config: VoiceHotkeyConfig;
   onChange: (next: VoiceHotkeyConfig) => void;
+  presets: { id: string; config: VoiceHotkeyConfig }[];
+  platform: HotkeyPlatform;
+  title: string;
+  hint: string;
+  note?: string;
 }) {
   const [listening, setListening] = useState(false);
 
@@ -387,14 +399,20 @@ function HotkeySettings({
     if (id === "metaRight") return t.dictation.hotkeyPresetMetaRight;
     if (id === "metaLeft") return t.dictation.hotkeyPresetMetaLeft;
     if (id === "ctrl") return t.dictation.hotkeyPresetCtrl;
+    if (id === "winCtrlRight") return t.dictation.hotkeyPresetWinCtrlRight;
+    if (id === "winCtrlLeft") return t.dictation.hotkeyPresetWinCtrlLeft;
+    if (id === "winAltRight") return t.dictation.hotkeyPresetWinAltRight;
+    if (id === "winAltLeft") return t.dictation.hotkeyPresetWinAltLeft;
+    if (id === "winCapsLock") return t.dictation.hotkeyPresetWinCapsLock;
+    if (id === "winF8") return t.dictation.hotkeyPresetWinF8;
     return t.dictation.hotkeyPresetCustom;
   };
 
-  const selectValue = hotkeySelectValue(config);
+  const selectValue = hotkeySelectValue(config, presets, platform);
   const options = [
-    ...HOTKEY_PRESETS.map((preset) => ({ value: preset.id, label: presetLabel(preset.id) })),
+    ...presets.map((preset) => ({ value: preset.id, label: presetLabel(preset.id) })),
     ...(selectValue === "custom"
-      ? [{ value: "custom", label: `${t.dictation.hotkeyPresetCustom}: ${formatHotkey(config)}` }]
+      ? [{ value: "custom", label: `${t.dictation.hotkeyPresetCustom}: ${formatHotkey(config, platform)}` }]
       : []),
     { value: "off", label: t.dictation.hotkeyClear },
   ];
@@ -402,7 +420,7 @@ function HotkeySettings({
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm">{t.dictation.hotkey}</span>
+        <span className="text-sm">{title}</span>
         <Select
           className="min-w-[14rem]"
           value={selectValue}
@@ -413,13 +431,13 @@ function HotkeySettings({
               return;
             }
             if (next === "custom") return;
-            const preset = HOTKEY_PRESETS.find((item) => item.id === next);
+            const preset = presets.find((item) => item.id === next);
             if (preset) onChange(preset.config);
           }}
         />
       </div>
-      <span className="text-xs text-muted-foreground">{t.dictation.hotkeyHint}</span>
-      <span className="text-xs text-muted-foreground">{t.dictation.hotkeyFnNote}</span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+      {note ? <span className="text-xs text-muted-foreground">{note}</span> : null}
       <div>
         <Button size="sm" variant={listening ? "default" : "outline"} onClick={() => setListening((open) => !open)}>
           {listening ? t.dictation.hotkeyListening : t.dictation.hotkeyListen}
@@ -511,7 +529,13 @@ function VoiceInputSettings() {
         "hotkeyAlt" in patch ||
         "hotkeyCtrl" in patch ||
         "hotkeyShift" in patch ||
-        "hotkeyMeta" in patch
+        "hotkeyMeta" in patch ||
+        "hotkeyWinEnabled" in patch ||
+        "hotkeyWinCode" in patch ||
+        "hotkeyWinAlt" in patch ||
+        "hotkeyWinCtrl" in patch ||
+        "hotkeyWinShift" in patch ||
+        "hotkeyWinMeta" in patch
       ) {
         publishHotkeyConfig(hotkeyFromSettings({ ...(state?.settings ?? {}), ...patch }));
       }
@@ -717,8 +741,22 @@ function VoiceInputSettings() {
         <div className="flex flex-col gap-3">
           <HotkeySettings
             t={t}
-            config={hotkeyFromSettings(values)}
-            onChange={(next) => void save(hotkeyToSettings(next))}
+            config={hotkeyFromSettings(values, "mac")}
+            onChange={(next) => void save(hotkeyToSettings(next, "mac"))}
+            presets={HOTKEY_PRESETS}
+            platform="mac"
+            title={t.dictation.hotkey}
+            hint={t.dictation.hotkeyHint}
+            note={t.dictation.hotkeyFnNote}
+          />
+          <HotkeySettings
+            t={t}
+            config={hotkeyFromSettings(values, "windows")}
+            onChange={(next) => void save(hotkeyToSettings(next, "windows"))}
+            presets={WINDOWS_HOTKEY_PRESETS}
+            platform="windows"
+            title={t.dictation.hotkeyWindows}
+            hint={t.dictation.hotkeyWindowsHint}
           />
           <Toggle
             label={t.dictation.fillers}

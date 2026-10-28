@@ -35,7 +35,7 @@ export const fr: Dictionary = {
     fillersHint: "Un vrai mot étiré est remis droit au lieu d’être supprimé.",
     quotes: "Corriger guillemets et espaces",
     quotesHint: "Les guillemets droits deviennent typographiques et les espaces en trop disparaissent.",
-    hotkey: "Raccourci de dictée",
+    hotkey: "Raccourci de dictée sur macOS",
     hotkeyHint: "Maintenez pour enregistrer, relâchez pour arrêter. Un double appui continue jusqu’à un nouvel appui ou la coche.",
     hotkeyFnNote:
       "Le navigateur ne voit pas Fn / Globe sur Mac, donc il n’est pas dans la liste. Par défaut : Option droit, comme Voica. Un MacBook n’a qu’un Contrôle, à gauche.",
@@ -48,6 +48,15 @@ export const fr: Dictionary = {
     hotkeyPresetMetaRight: "⌘ Command droit",
     hotkeyPresetMetaLeft: "⌘ Command gauche",
     hotkeyPresetCtrl: "⌃ Contrôle",
+    hotkeyWindows: "Raccourci sous Windows (app BB)",
+    hotkeyWindowsHint:
+      "Pour l’app BB sous Windows. Par défaut : Ctrl droit. Maintenez pour enregistrer, relâchez pour arrêter. Un double appui continue jusqu’à un nouvel appui ou la coche.",
+    hotkeyPresetWinCtrlRight: "Ctrl droit",
+    hotkeyPresetWinCtrlLeft: "Ctrl gauche",
+    hotkeyPresetWinAltRight: "Alt droit",
+    hotkeyPresetWinAltLeft: "Alt gauche",
+    hotkeyPresetWinCapsLock: "Verr. maj.",
+    hotkeyPresetWinF8: "F8",
   },
 
   vocabulary: {

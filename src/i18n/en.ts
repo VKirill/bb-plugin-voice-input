@@ -35,7 +35,7 @@ export const en: Dictionary = {
     fillersHint: "A stretched real word is straightened instead of dropped.",
     quotes: "Fix quotes and spacing",
     quotesHint: "Straight quotes become typographic ones, extra spaces go away.",
-    hotkey: "Dictation shortcut",
+    hotkey: "Dictation shortcut on macOS",
     hotkeyHint: "Hold to record, release to stop. Double-tap to keep recording until you tap again or press the checkmark.",
     hotkeyFnNote:
       "Fn / Globe is not visible to the browser on a Mac, so it is not in this list. Default is Right Option, same as Voica. A MacBook has one Control, on the left.",
@@ -48,6 +48,15 @@ export const en: Dictionary = {
     hotkeyPresetMetaRight: "Right ⌘ Command",
     hotkeyPresetMetaLeft: "Left ⌘ Command",
     hotkeyPresetCtrl: "⌃ Control",
+    hotkeyWindows: "Shortcut on Windows (BB app)",
+    hotkeyWindowsHint:
+      "Used in the Windows BB app. Default is Right Ctrl. Hold to record, release to stop. Double-tap to keep recording until you tap again or press the checkmark.",
+    hotkeyPresetWinCtrlRight: "Right Ctrl",
+    hotkeyPresetWinCtrlLeft: "Left Ctrl",
+    hotkeyPresetWinAltRight: "Right Alt",
+    hotkeyPresetWinAltLeft: "Left Alt",
+    hotkeyPresetWinCapsLock: "Caps Lock",
+    hotkeyPresetWinF8: "F8",
   },
 
   vocabulary: {
