@@ -15,6 +15,14 @@ export type VoiceHotkeyConfig = {
   meta: boolean;
 };
 
+export type HotkeyPlatform = "mac" | "windows" | "other";
+
+export type HotkeyNavigator = {
+  userAgentData?: { platform?: string } | null;
+  platform?: string;
+  userAgent?: string;
+};
+
 export const DEFAULT_HOTKEY: VoiceHotkeyConfig = {
   enabled: true,
   code: "AltRight",
@@ -23,6 +31,27 @@ export const DEFAULT_HOTKEY: VoiceHotkeyConfig = {
   shift: false,
   meta: false,
 };
+
+export const DEFAULT_WINDOWS_HOTKEY: VoiceHotkeyConfig = {
+  enabled: true,
+  code: "ControlRight",
+  alt: false,
+  ctrl: false,
+  shift: false,
+  meta: false,
+};
+
+export function detectHotkeyPlatform(nav?: HotkeyNavigator | null): HotkeyPlatform {
+  const source =
+    nav ??
+    (typeof navigator === "undefined" ? null : (navigator as HotkeyNavigator));
+  const blob = [source?.userAgentData?.platform, source?.platform, source?.userAgent]
+    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .join(" ");
+  if (/Win/i.test(blob)) return "windows";
+  if (/Mac/i.test(blob)) return "mac";
+  return "other";
+}
 
 const PRESET = (code: string): VoiceHotkeyConfig => ({
   enabled: true,
@@ -40,6 +69,15 @@ export const HOTKEY_PRESETS: { id: string; config: VoiceHotkeyConfig }[] = [
   { id: "metaRight", config: PRESET("MetaRight") },
   { id: "metaLeft", config: PRESET("MetaLeft") },
   { id: "ctrl", config: PRESET("ControlLeft") },
+];
+
+export const WINDOWS_HOTKEY_PRESETS: { id: string; config: VoiceHotkeyConfig }[] = [
+  { id: "winCtrlRight", config: { ...DEFAULT_WINDOWS_HOTKEY } },
+  { id: "winCtrlLeft", config: PRESET("ControlLeft") },
+  { id: "winAltRight", config: PRESET("AltRight") },
+  { id: "winAltLeft", config: PRESET("AltLeft") },
+  { id: "winCapsLock", config: PRESET("CapsLock") },
+  { id: "winF8", config: PRESET("F8") },
 ];
 
 const MODIFIER_CODES = new Set([
@@ -67,12 +105,12 @@ export function isModifierCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
-export function parseHotkeyConfig(raw: unknown): VoiceHotkeyConfig {
+export function parseHotkeyConfig(raw: unknown, fallback: VoiceHotkeyConfig = DEFAULT_HOTKEY): VoiceHotkeyConfig {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ...DEFAULT_HOTKEY };
+    return { ...fallback };
   }
   const source = raw as Record<string, unknown>;
-  const code = typeof source.code === "string" ? source.code : DEFAULT_HOTKEY.code;
+  const code = typeof source.code === "string" ? source.code : fallback.code;
   return {
     enabled: source.enabled !== false,
     code,
@@ -83,19 +121,79 @@ export function parseHotkeyConfig(raw: unknown): VoiceHotkeyConfig {
   };
 }
 
-export function hotkeyFromSettings(values: Record<string, unknown> | null | undefined): VoiceHotkeyConfig {
-  if (!values) return { ...DEFAULT_HOTKEY };
-  return parseHotkeyConfig({
-    enabled: values.hotkeyEnabled !== false,
-    code: typeof values.hotkeyCode === "string" ? values.hotkeyCode : DEFAULT_HOTKEY.code,
-    alt: values.hotkeyAlt === true,
-    ctrl: values.hotkeyCtrl === true,
-    shift: values.hotkeyShift === true,
-    meta: values.hotkeyMeta === true,
-  });
+function parseHotkeyFields(
+  values: Record<string, unknown>,
+  keys: {
+    enabled: string;
+    code: string;
+    alt: string;
+    ctrl: string;
+    shift: string;
+    meta: string;
+  },
+  fallback: VoiceHotkeyConfig,
+): VoiceHotkeyConfig {
+  return parseHotkeyConfig(
+    {
+      enabled: values[keys.enabled] !== false,
+      code: typeof values[keys.code] === "string" ? values[keys.code] : fallback.code,
+      alt: values[keys.alt] === true,
+      ctrl: values[keys.ctrl] === true,
+      shift: values[keys.shift] === true,
+      meta: values[keys.meta] === true,
+    },
+    fallback,
+  );
 }
 
-export function hotkeyToSettings(config: VoiceHotkeyConfig): Record<string, boolean | string> {
+export function hotkeyFromSettings(
+  values: Record<string, unknown> | null | undefined,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): VoiceHotkeyConfig {
+  if (platform === "windows") {
+    if (!values) return { ...DEFAULT_WINDOWS_HOTKEY };
+    return parseHotkeyFields(
+      values,
+      {
+        enabled: "hotkeyWinEnabled",
+        code: "hotkeyWinCode",
+        alt: "hotkeyWinAlt",
+        ctrl: "hotkeyWinCtrl",
+        shift: "hotkeyWinShift",
+        meta: "hotkeyWinMeta",
+      },
+      DEFAULT_WINDOWS_HOTKEY,
+    );
+  }
+  if (!values) return { ...DEFAULT_HOTKEY };
+  return parseHotkeyFields(
+    values,
+    {
+      enabled: "hotkeyEnabled",
+      code: "hotkeyCode",
+      alt: "hotkeyAlt",
+      ctrl: "hotkeyCtrl",
+      shift: "hotkeyShift",
+      meta: "hotkeyMeta",
+    },
+    DEFAULT_HOTKEY,
+  );
+}
+
+export function hotkeyToSettings(
+  config: VoiceHotkeyConfig,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): Record<string, boolean | string> {
+  if (platform === "windows") {
+    return {
+      hotkeyWinEnabled: config.enabled,
+      hotkeyWinCode: config.code,
+      hotkeyWinAlt: config.alt,
+      hotkeyWinCtrl: config.ctrl,
+      hotkeyWinShift: config.shift,
+      hotkeyWinMeta: config.meta,
+    };
+  }
   return {
     hotkeyEnabled: config.enabled,
     hotkeyCode: config.code,
@@ -106,15 +204,19 @@ export function hotkeyToSettings(config: VoiceHotkeyConfig): Record<string, bool
   };
 }
 
-function codeFamily(code: string): string {
-  if (code === "ControlLeft" || code === "ControlRight") return "Control";
+function codeFamily(code: string, platform: HotkeyPlatform): string {
+  if (platform === "mac" && (code === "ControlLeft" || code === "ControlRight")) return "Control";
   return code;
 }
 
-export function configsMatch(a: VoiceHotkeyConfig, b: VoiceHotkeyConfig): boolean {
+export function configsMatch(
+  a: VoiceHotkeyConfig,
+  b: VoiceHotkeyConfig,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): boolean {
   return (
     a.enabled === b.enabled &&
-    codeFamily(a.code) === codeFamily(b.code) &&
+    codeFamily(a.code, platform) === codeFamily(b.code, platform) &&
     a.alt === b.alt &&
     a.ctrl === b.ctrl &&
     a.shift === b.shift &&
@@ -122,15 +224,23 @@ export function configsMatch(a: VoiceHotkeyConfig, b: VoiceHotkeyConfig): boolea
   );
 }
 
-export function hotkeySelectValue(config: VoiceHotkeyConfig): string {
+export function hotkeySelectValue(
+  config: VoiceHotkeyConfig,
+  presets: { id: string; config: VoiceHotkeyConfig }[] = HOTKEY_PRESETS,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): string {
   if (!config.enabled || !config.code) return "off";
-  const preset = HOTKEY_PRESETS.find((item) => configsMatch(config, item.config));
+  const preset = presets.find((item) => configsMatch(config, item.config, platform));
   return preset?.id ?? "custom";
 }
 
-export function eventMatchesHotkey(event: HotkeyKeyEvent, config: VoiceHotkeyConfig): boolean {
+export function eventMatchesHotkey(
+  event: HotkeyKeyEvent,
+  config: VoiceHotkeyConfig,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): boolean {
   if (!config.enabled || !config.code) return false;
-  if (codeFamily(event.code) !== codeFamily(config.code)) return false;
+  if (codeFamily(event.code, platform) !== codeFamily(config.code, platform)) return false;
 
   const selfAlt = config.code === "AltLeft" || config.code === "AltRight";
   const selfCtrl = config.code === "ControlLeft" || config.code === "ControlRight";
@@ -166,15 +276,34 @@ const CODE_LABELS: Record<string, string> = {
   CapsLock: "Caps Lock",
 };
 
-export function formatHotkey(config: VoiceHotkeyConfig): string {
+const WINDOWS_CODE_LABELS: Record<string, string> = {
+  AltRight: "Right Alt",
+  AltLeft: "Left Alt",
+  ControlRight: "Right Ctrl",
+  ControlLeft: "Left Ctrl",
+  ShiftRight: "Right Shift",
+  ShiftLeft: "Left Shift",
+  MetaRight: "Right Win",
+  MetaLeft: "Left Win",
+  Fn: "Fn",
+  Space: "Space",
+  CapsLock: "Caps Lock",
+};
+
+export function formatHotkey(
+  config: VoiceHotkeyConfig,
+  platform: HotkeyPlatform = detectHotkeyPlatform(),
+): string {
   if (!config.code) return "";
+  const windows = platform === "windows";
+  const labels = windows ? WINDOWS_CODE_LABELS : CODE_LABELS;
   const parts: string[] = [];
   if (config.ctrl) parts.push("Ctrl");
-  if (config.alt) parts.push("Option");
+  if (config.alt) parts.push(windows ? "Alt" : "Option");
   if (config.shift) parts.push("Shift");
-  if (config.meta) parts.push("Command");
-  if (CODE_LABELS[config.code]) {
-    parts.push(CODE_LABELS[config.code]);
+  if (config.meta) parts.push(windows ? "Win" : "Command");
+  if (labels[config.code]) {
+    parts.push(labels[config.code]);
   } else if (config.code.startsWith("Key") && config.code.length === 4) {
     parts.push(config.code.slice(3));
   } else if (config.code.startsWith("Digit") && config.code.length === 6) {
@@ -293,11 +422,16 @@ export function publishHotkeyConfig(config: VoiceHotkeyConfig): void {
   window.dispatchEvent(new CustomEvent(HOTKEY_EVENT, { detail: config }));
 }
 
+function platformDefaultHotkey(platform: HotkeyPlatform = detectHotkeyPlatform()): VoiceHotkeyConfig {
+  return platform === "windows" ? { ...DEFAULT_WINDOWS_HOTKEY } : { ...DEFAULT_HOTKEY };
+}
+
 export function readPublishedHotkeyConfig(): VoiceHotkeyConfig {
-  if (typeof window === "undefined") return { ...DEFAULT_HOTKEY };
+  const fallback = platformDefaultHotkey();
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(HOTKEY_STORAGE_KEY);
-    if (raw) return parseHotkeyConfig(JSON.parse(raw));
+    if (raw) return parseHotkeyConfig(JSON.parse(raw), fallback);
   } catch {}
-  return { ...DEFAULT_HOTKEY };
+  return fallback;
 }

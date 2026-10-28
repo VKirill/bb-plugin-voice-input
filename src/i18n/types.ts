@@ -49,6 +49,14 @@ export type Dictionary = {
     hotkeyPresetMetaRight: string;
     hotkeyPresetMetaLeft: string;
     hotkeyPresetCtrl: string;
+    hotkeyWindows: string;
+    hotkeyWindowsHint: string;
+    hotkeyPresetWinCtrlRight: string;
+    hotkeyPresetWinCtrlLeft: string;
+    hotkeyPresetWinAltRight: string;
+    hotkeyPresetWinAltLeft: string;
+    hotkeyPresetWinCapsLock: string;
+    hotkeyPresetWinF8: string;
   };
 
   vocabulary: {

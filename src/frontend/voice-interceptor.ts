@@ -9,6 +9,7 @@ import { loadFrontendLanguage, observeFrontendLanguage, subscribeFrontendLanguag
 import {
   HOTKEY_EVENT,
   createPttState,
+  detectHotkeyPlatform,
   eventMatchesHotkey,
   hotkeyFromSettings,
   pttInterrupted,
@@ -265,6 +266,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
 
   };
 
+  const hotkeyPlatform = detectHotkeyPlatform();
   let hotkeyConfig: VoiceHotkeyConfig = readPublishedHotkeyConfig();
   let pttState: PttState = createPttState();
   let pttTimer: number | null = null;
@@ -319,7 +321,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   const onHotkeyDown = (event: KeyboardEvent) => {
     if (document.documentElement.dataset.bbVoiceHotkeyCapture === "1") return;
     if (event.repeat) return;
-    if (!eventMatchesHotkey(event, hotkeyConfig)) {
+    if (!eventMatchesHotkey(event, hotkeyConfig, hotkeyPlatform)) {
       interruptPtt();
       return;
     }
@@ -336,7 +338,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
 
   const onHotkeyUp = (event: KeyboardEvent) => {
     if (document.documentElement.dataset.bbVoiceHotkeyCapture === "1") return;
-    if (!eventMatchesHotkey(event, hotkeyConfig)) return;
+    if (!eventMatchesHotkey(event, hotkeyConfig, hotkeyPlatform)) return;
     event.preventDefault();
     const next = pttKeyUp(pttState, Date.now());
     pttState = next.state;
@@ -370,7 +372,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
             ? (raw as { result: { settings?: Record<string, unknown> } }).result
             : (raw as { settings?: Record<string, unknown> });
         if (payload?.settings) {
-          hotkeyConfig = hotkeyFromSettings(payload.settings);
+          hotkeyConfig = hotkeyFromSettings(payload.settings, hotkeyPlatform);
         }
       })
       .catch(() => {});

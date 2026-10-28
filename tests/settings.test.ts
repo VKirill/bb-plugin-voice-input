@@ -41,3 +41,15 @@ test("клавиша диктовки сохраняется отдельно о
   assert.equal(merged.hotkeyCode, "MetaRight");
   assert.equal(merged.vocabulary, DEFAULT_SETTINGS.vocabulary);
 });
+
+test("старые настройки без hotkeyWin* оставляют остальные поля и берут Windows-умолчание", () => {
+  const merged = mergeSettings({
+    vocabulary: "BB, MLX",
+    hotkeyCode: "AltLeft",
+    hotkeyEnabled: true,
+  });
+  assert.equal(merged.vocabulary, "BB, MLX");
+  assert.equal(merged.hotkeyCode, "AltLeft");
+  assert.equal(merged.hotkeyWinCode, "ControlRight");
+  assert.equal(merged.hotkeyWinEnabled, true);
+});
