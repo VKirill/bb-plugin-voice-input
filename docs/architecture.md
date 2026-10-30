@@ -2,9 +2,9 @@
 title: Architecture
 type: architecture
 created: 2026-10-01
-updated: 2026-10-17
+updated: 2026-10-30
 status: active
-confidence: high
+confidence: medium
 tags: [architecture, runtime, bb-plugin]
 sources:
   - server.ts
@@ -26,14 +26,15 @@ sources:
   - scripts/embed-assets.mjs
   - src/daemon.ts
   - src/embedded-assets.generated.ts
+  - src/frontend/hotkey.ts
 ---
 # Architecture
 
-TL;DR: The plugin server registers BB-facing RPC, CLI, and AI-service interfaces; the React settings page uses plugin RPC; the selected host handles transcription and local model processes (`server.ts:353-558`, `host.ts:432-629`).
+TL;DR: The plugin server registers BB-facing RPC, CLI, and AI-service interfaces; the React settings page uses plugin RPC; config is pushed to connected hosts, and BB host resolution selects the machine for a transcription request (`server.ts:353-558`, `server.ts:244-256`, `server.ts:819-855`).
 
 ## System Context
 
-BB routes voice-service requests and plugin-page calls into the plugin. The plugin server forwards configuration and host RPC to the selected recognition machine; that host calls cloud APIs or local Python engines (`server.ts:172-175`, `server.ts:238-255`, `host.ts:278-351`).
+BB routes voice-service requests and plugin-page calls into the plugin. The plugin server pushes configuration to every connected host; it resolves a host for each host RPC, and that host calls cloud APIs or local Python engines for transcription (`server.ts:172-175`, `server.ts:244-256`, `server.ts:819-855`, `host.ts:278-351`).
 
 ## Containers
 
@@ -64,7 +65,7 @@ The UI is the plugin settings app registered from `package.json`; BB invokes the
 
 - **Plugin server** — `server.ts` registers the page RPC handlers, host client, AI service, and CLI commands (`server.ts:172-175`, `server.ts:353-591`).
 - **Recognition host** — `host.ts` implements the management contract and `ai.voice.transcribe` path (`host.ts:432-557`).
-- **Contracts and settings** — `src/contract.ts` defines engine IDs, shared configuration, and host RPC methods; `src/settings-store.ts` owns persisted settings validation and defaults (`src/contract.ts:8-210`, `src/settings-store.ts:20-103`).
+- **Contracts and settings** — `src/contract.ts` defines engine IDs, shared configuration, and host RPC methods; `src/settings-store.ts` owns persisted settings validation and defaults. Browser hotkey conversion selects platform-specific fields, with separate Windows and non-Windows settings (`src/contract.ts:8-210`, `src/settings-store.ts:20-115`, `src/frontend/hotkey.ts:149-205`).
 - **Browser dictation** — `src/frontend/` detects triggers, keeps recording state at page scope, and inserts text into BB drafts (`src/frontend/voice-interceptor.ts:23-49`, `src/frontend/global-voice-session.ts:105-164`, `src/frontend/composer-insert.ts:1-5`).
 - **Local engines** — `python/voiced.py` serves JSON requests over a Unix socket; `python/engines.py` implements Whisper and GigaAM (`python/voiced.py:1-9`, `python/engines.py:22-35`, `python/engines.py:225`).
 - **Daemon lifecycle** — `src/daemon.ts` pings an engine socket, removes a stale path, materializes Python assets, starts a detached worker and polls until the daemon answers. `stopDaemon` requests shutdown and removes the socket path (`src/daemon.ts:84-154`).

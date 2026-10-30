@@ -2,9 +2,9 @@
 title: Data model
 type: data-model
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-30
 status: active
-confidence: high
+confidence: medium
 tags: [data-model, storage, privacy]
 sources:
   - src/settings-store.ts
@@ -45,7 +45,7 @@ erDiagram
   BB_DRAFTS ||--o{ DICTATION_SESSION : "transcript insertion"
 ```
 
-The edges describe code relationships rather than database foreign keys: settings are synchronized by name/value mapping, history links to recordings through a path, and model activity is computed from current config (`server.ts:194-230`, `host.ts:231-251`, `host.ts:595-607`).
+The edges describe code relationships rather than database foreign keys: settings are synchronized by name/value mapping, history links to recordings through a path, and model activity is computed from current config (`server.ts:194-230`, `host.ts:231-251`, `host.ts:602-613`).
 
 ## Collections
 
@@ -89,9 +89,11 @@ The edges describe code relationships rather than database foreign keys: setting
 | `hotkeyAlt` | Boolean requiring Alt/Option modifier for non-modifier hotkeys. | `src/settings-store.ts:56-62`, `src/frontend/hotkey.ts:98-107` |
 | `hotkeyCtrl` | Boolean requiring Control modifier for non-modifier hotkeys. | `src/settings-store.ts:56-62`, `src/frontend/hotkey.ts:98-107` |
 | `hotkeyShift` | Boolean requiring Shift modifier for non-modifier hotkeys. | `src/settings-store.ts:56-62`, `src/frontend/hotkey.ts:98-107` |
-| `hotkeyMeta` | Boolean requiring Meta/Command modifier for non-modifier hotkeys. | `src/settings-store.ts:56-62`, `src/frontend/hotkey.ts:98-107` |
+| `hotkeyMeta` | Boolean requiring Meta/Command modifier for non-modifier hotkeys. | `src/settings-store.ts:56-61`, `src/frontend/hotkey.ts:245-263` |
+| `hotkeyWinEnabled`, `hotkeyWinCode` | Windows shortcut enabled flag and keyboard event code; defaults to enabled `ControlRight`. | `src/settings-store.ts:62-67`, `src/settings-store.ts:109-115` |
+| `hotkeyWinAlt`, `hotkeyWinCtrl`, `hotkeyWinShift`, `hotkeyWinMeta` | Required modifier flags for a Windows shortcut; all default to false. | `src/settings-store.ts:62-67`, `src/settings-store.ts:109-115` |
 
-**Keys and invariants:** The storage key is `settings`. Unknown keys are ignored; known keys are validated independently during reads and merged with defaults (`server.ts:160-169`, `src/settings-store.ts:113-143`). A patch with any invalid value returns an empty patch (`src/settings-store.ts:133-143`).
+**Keys and invariants:** The storage key is `settings`. Unknown keys are ignored; known keys are validated independently during reads and merged with defaults (`server.ts:160-169`, `src/settings-store.ts:113-143`). `sanitizePatch` keeps only keys present in defaults, then validates the remaining partial object. If that object fails schema validation it returns `{}`; a patch containing only unknown keys becomes an empty validated object (`src/settings-store.ts:145-155`).
 
 **Writers and readers:** The plugin server writes settings from page RPC and CLI config; server code reads them to construct host config and resolve machine selection (`server.ts:162-169`, `server.ts:474-493`, `server.ts:647-674`).
 
@@ -197,7 +199,7 @@ The draft object preserves `attachments` and optional `mentions`, updates `text`
 | `code` | Keyboard event code for the trigger. | `src/frontend/hotkey.ts:9-16`, `src/frontend/hotkey.ts:272-287` |
 | `alt`, `ctrl`, `shift`, `meta` | Required modifier flags. | `src/frontend/hotkey.ts:9-16`, `src/frontend/hotkey.ts:272-287` |
 
-The settings page publishes this copy after loading or saving hotkey settings; the interceptor reads it and listens for the accompanying custom event (`app.tsx:456-460`, `app.tsx:482-497`, `src/frontend/hotkey.ts:272-287`). The BB plugin KV setting remains the settings source of truth (`server.ts:160-169`).
+The settings page publishes this copy after loading or saving hotkey settings; the interceptor reads it and listens for the accompanying custom event (`app.tsx:490-495`, `app.tsx:516-539`, `src/frontend/hotkey.ts:349-365`). The BB plugin KV setting remains the settings source of truth (`server.ts:160-169`). Windows and non-Windows values use separate field families, and platform detection selects which family the browser reads and writes (`src/frontend/hotkey.ts:44-53`, `src/frontend/hotkey.ts:149-205`).
 
 ## Status transitions
 
@@ -208,7 +210,7 @@ The settings page publishes this copy after loading or saving hotkey settings; t
 | Dictation session `state` | `transcribing → idle` | Result, empty audio, or failure (`src/frontend/global-voice-session.ts:373-377`, `src/frontend/global-voice-session.ts:436-452`). |
 | Engine `detail` | `not-installed`, `needs-key`, `broken:<message>`, or `ready` | `engineReady` derives cloud state from key presence and local state from virtualenv/package import (`src/setup.ts:129-153`). |
 | Model download `state` | `downloading → done` or `downloading → error` | Host emits progress/done/error events from the Python downloader (`src/contract.ts:212-225`, `host.ts:568-593`, `python/download.py:126-146`). |
-| Model record `active` | `false ↔ true` | `listModels` computes it against the configured engine/model during each read (`host.ts:595-607`). |
+| Model record `active` | Computed on each read: true for a Whisper item whose model matches `config.whisperModel`, or any GigaAM item while `config.engine` is `gigaam`; false otherwise. | `listModels` handler (`host.ts:602-613`). |
 
 ## Invariants and ownership
 
@@ -219,7 +221,7 @@ The settings page publishes this copy after loading or saving hotkey settings; t
 
 ## Retention and cleanup
 
-Successful transcription appends history and then prunes recording date directories. `keepDays <= 0` exits before scanning; positive values compare parsed directory dates with the millisecond threshold (`host.ts:176-190`, `host.ts:374-384`). The package contains no history compaction task. Model caches are removed only through the explicit delete-model operation (`host.ts:609-614`).
+Successful transcription appends history and then prunes recording date directories. `keepDays <= 0` exits before scanning; positive values compare parsed directory dates with the millisecond threshold (`host.ts:176-190`, `host.ts:374-384`). The package contains no history compaction task. The `deleteModel` RPC stops the selected engine daemon before asking the model store to remove the selected cache path (`host.ts:616-620`, `src/model-store.ts:82-92`).
 
 <!-- lane-pilot:backlinks -->
 ## Referenced by
