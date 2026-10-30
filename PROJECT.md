@@ -1,6 +1,6 @@
 ---
 title: BB Voice Input — Project Facts
-updated: 2026-10-27
+updated: 2026-10-30
 sources:
   - package.json
   - README.md
@@ -32,7 +32,7 @@ sources:
 
 ## Identity
 
-- BB plugin package `bb-plugin-voice-input`, version `0.2.12` (`package.json:1-5`).
+- BB plugin package `bb-plugin-voice-input`, version `0.2.13` (`package.json:1-3`).
 - Registers the `local-voice` AI service, plugin page, and `voice-input` CLI group (`package.json:17-27`, `server.ts:534-591`).
 - Recognition engines: local Whisper/GigaAM; cloud Groq/OpenAI/Google (`src/contract.ts:8-9`).
 
@@ -50,7 +50,8 @@ sources:
 - API key values are excluded from server-pushed config and stored on the recognition host with mode `0600` (`server.ts:194-230`, `src/secret-store.ts:36-53`).
 - Config changes stop local daemons no longer matching the selected engine/model (`host.ts:465-481`).
 - Transcription output is vocabulary-repaired, cleaned, optionally guarded after an AI pass, then recorded in JSONL history (`host.ts:192-229`, `host.ts:363-384`).
-- Browser dictation toggles between starting an idle session and stopping a recording. A short hotkey press waits for a second press; if none arrives within 420 ms, it cancels without transcription (`src/frontend/voice-interceptor.ts:148-158`, `src/frontend/hotkey.ts:231-274`).
+- Browser dictation reads a platform-specific hotkey: Windows uses `hotkeyWin*` fields and defaults to right Control; macOS and other platforms use `hotkey*` fields and default to right Option (`src/frontend/hotkey.ts:26-53`, `src/frontend/hotkey.ts:149-205`, `src/settings-store.ts:101-115`).
+- A short hotkey press waits for a second press; if none arrives within 420 ms, it cancels without transcription (`src/frontend/hotkey.ts:4-8`, `src/frontend/hotkey.ts:398-402`).
 - Interface text resolves BB's regional language code to one of eight dictionaries; unsupported codes use English (`src/frontend/words.ts:7-10`, `src/i18n/index.ts:13-35`).
 - Details and rationale: [Architecture](docs/architecture.md), [Data model](docs/data-model.md).
 
@@ -77,7 +78,6 @@ sources:
 | `npm run build` | Embed Python assets and build BB plugin bundles (`package.json:57-60`). |
 | `npm run typecheck` | Run TypeScript compiler without emitting output (`package.json:60`). |
 | `npm test` | Run `node --test tests/*.test.ts` (`package.json:61`). |
-| `bb plugin install .` | Install this checkout in BB (`README.md:7-15`). |
 | `bb voice-input status` | Inspect recognition host and engine state (`server.ts:610-629`). |
 | `bb voice-input setup` | Set up the configured engine (`server.ts:632-645`). |
 | `bb voice-input history 5` | Read recent successful transcriptions (`server.ts:712-730`). |
