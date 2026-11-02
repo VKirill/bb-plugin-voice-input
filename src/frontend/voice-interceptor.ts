@@ -5,6 +5,13 @@
 
 import { rememberComposerCaretFromDocument } from "./composer-insert.ts";
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
+import {
+  DICTATION_BEHAVIOR_EVENT,
+  dictationBehaviorFromSettings,
+  publishDictationBehavior,
+  readDictationBehavior,
+  type DictationBehavior,
+} from "./dictation-behavior.ts";
 import { loadFrontendLanguage, observeFrontendLanguage, subscribeFrontendLanguage, words } from "./words.ts";
 import {
   HOTKEY_EVENT,
@@ -195,6 +202,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let barElement: HTMLElement | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let timerElement: HTMLElement | null = null;
+  let previewElement: HTMLElement | null = null;
   let confirmBtnElement: HTMLButtonElement | null = null;
   let cancelBtnElement: HTMLButtonElement | null = null;
   let badgeElement: HTMLButtonElement | null = null;
@@ -270,6 +278,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let hotkeyConfig: VoiceHotkeyConfig = readPublishedHotkeyConfig();
   let pttState: PttState = createPttState();
   let pttTimer: number | null = null;
+  // Пока клавишу держат, человек сам решает, когда закончить: тишина не в счёт.
+  globalVoiceSession.setAutoStopSuppressor(() => pttState.mode === "holding");
 
   const applyPttAction = (action: "start" | "stop" | "cancel" | "none") => {
     if (action === "cancel") {
@@ -373,9 +383,15 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
             : (raw as { settings?: Record<string, unknown> });
         if (payload?.settings) {
           hotkeyConfig = hotkeyFromSettings(payload.settings, hotkeyPlatform);
+          publishDictationBehavior(dictationBehaviorFromSettings(payload.settings));
         }
       })
       .catch(() => {});
+  };
+
+  const onBehaviorConfig = (event: Event) => {
+    const detail = (event as CustomEvent<DictationBehavior>).detail;
+    globalVoiceSession.setBehavior(detail && typeof detail === "object" ? detail : readDictationBehavior());
   };
 
   const onSelectionChange = () => {
@@ -401,6 +417,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   window.addEventListener("keydown", onHotkeyDown, { capture: true, signal });
   window.addEventListener("keyup", onHotkeyUp, { capture: true, signal });
   window.addEventListener(HOTKEY_EVENT, onHotkeyConfig, { signal });
+  window.addEventListener(DICTATION_BEHAVIOR_EVENT, onBehaviorConfig, { signal });
   window.addEventListener("blur", onWindowBlur, { signal });
   document.addEventListener("selectionchange", onSelectionChange, { signal });
   loadHotkeyFromServer();
@@ -448,6 +465,12 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     canvasElement = document.createElement("canvas");
     canvasElement.style.cssText = `flex:1;height:100%;display:block;min-width:40px;-webkit-mask-image:linear-gradient(to right, transparent 0%, black 48px);mask-image:linear-gradient(to right, transparent 0%, black 48px);`;
     center.appendChild(canvasElement);
+
+    // Черновая расшифровка: видна последняя часть фразы, начало уходит в «…».
+    previewElement = document.createElement("span");
+    previewElement.id = "bb-voice-preview";
+    previewElement.style.cssText = `display:none;flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;direction:rtl;text-align:left;font-size:13px;color:var(--muted-foreground,#71717a);font-style:italic;`;
+    center.appendChild(previewElement);
 
     if (typeof ResizeObserver !== "undefined") {
       resizeObserver = new ResizeObserver(() => {
@@ -557,6 +580,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         canvasElement = null;
         cachedCtx = null;
         timerElement = null;
+        previewElement = null;
         confirmBtnElement = null;
         cancelBtnElement = null;
         badgeElement = null;
@@ -774,6 +798,22 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
         }
       }
 
+      if (previewElement && canvasElement) {
+        const preview = snapshot.previewText;
+        if (previewElement.dataset.text !== preview) {
+          previewElement.dataset.text = preview;
+          previewElement.replaceChildren();
+          if (preview) {
+            const inner = document.createElement("bdi");
+            inner.style.cssText = "direction:ltr;unicode-bidi:isolate;";
+            inner.textContent = preview;
+            previewElement.appendChild(inner);
+          }
+          previewElement.style.display = preview ? "block" : "none";
+          canvasElement.style.flex = preview ? "0 0 72px" : "1";
+        }
+      }
+
       // Обновление таймера раз в кадр (меняет DOM только раз в секунду)
       if (timerElement && snapshot.state === "recording") {
         const t = formatDuration(globalVoiceSession.getDurationMs());
@@ -860,6 +900,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     window.removeEventListener("keydown", onHotkeyDown, { capture: true });
     window.removeEventListener("keyup", onHotkeyUp, { capture: true });
     window.removeEventListener(HOTKEY_EVENT, onHotkeyConfig);
+    window.removeEventListener(DICTATION_BEHAVIOR_EVENT, onBehaviorConfig);
     window.removeEventListener("blur", onWindowBlur);
     clearPttTimer();
 

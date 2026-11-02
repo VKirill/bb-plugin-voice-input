@@ -57,6 +57,14 @@ export const de: Dictionary = {
     hotkeyPresetWinAltLeft: "Linkes Alt",
     hotkeyPresetWinCapsLock: "Feststelltaste",
     hotkeyPresetWinF8: "F8",
+    autoSend: "Automatisch senden",
+    autoSendHint: "Die Nachricht sofort senden, sobald das Transkript eingefügt ist.",
+    silenceStop: "Bei Stille stoppen",
+    silenceStopHint: "Nachdem Sie zu sprechen begonnen haben, stoppt die Aufnahme nach dieser Pause. Solange die Taste gehalten wird, läuft sie weiter.",
+    silenceStopOff: "Aus",
+    silenceStopSeconds: (seconds) => `Nach ${seconds} s`,
+    livePreview: "Live-Vorschau",
+    livePreviewHint: "Zeigt beim Sprechen, was bisher erkannt wurde. Nur lokale Engines (Whisper, GigaAM); belastet die Maschine jede Sekunde.",
   },
 
   vocabulary: {

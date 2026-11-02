@@ -197,6 +197,7 @@ export const managementContract = defineRpcContract({
         prompt: z.string().nullable().optional(),
         timeoutMs: z.number().int().positive().optional(),
         uiLanguage: z.enum(UI_LANGUAGES).optional(),
+        preview: z.boolean().optional(),
       })
       .strict(),
     output: z

@@ -55,6 +55,14 @@ export const zh: Dictionary = {
     hotkeyPresetWinAltLeft: "左 Alt",
     hotkeyPresetWinCapsLock: "Caps Lock",
     hotkeyPresetWinF8: "F8",
+    autoSend: "自动发送",
+    autoSendHint: "转写内容插入后立即发送消息。",
+    silenceStop: "静音时停止",
+    silenceStopHint: "开始说话后,静音达到此时长即停止录音。按住快捷键时会继续录音。",
+    silenceStopOff: "关闭",
+    silenceStopSeconds: (seconds) => `${seconds} 秒后`,
+    livePreview: "实时预览",
+    livePreviewHint: "说话时显示已识别的内容。仅限本地引擎(Whisper、GigaAM);每秒占用一次机器算力。",
   },
 
   vocabulary: {

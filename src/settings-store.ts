@@ -65,6 +65,9 @@ export const storedSettingsSchema = z
     hotkeyWinCtrl: z.boolean(),
     hotkeyWinShift: z.boolean(),
     hotkeyWinMeta: z.boolean(),
+    autoSend: z.boolean(),
+    silenceStopSeconds: z.number().min(0).max(10),
+    livePreview: z.boolean(),
   })
   .strict();
 
@@ -112,6 +115,9 @@ export const DEFAULT_SETTINGS: StoredSettings = {
     hotkeyWinCtrl: false,
     hotkeyWinShift: false,
     hotkeyWinMeta: false,
+    autoSend: false,
+    silenceStopSeconds: 0,
+    livePreview: false,
   };
 
 /**

@@ -26,6 +26,7 @@ import {
   type HotkeyPlatform,
   type VoiceHotkeyConfig,
 } from "./src/frontend/hotkey";
+import { dictationBehaviorFromSettings, publishDictationBehavior } from "./src/frontend/dictation-behavior";
 
 type EngineId = "whisper" | "gigaam" | "openai" | "google" | "groq";
 type DiskModel = { engine: string; model: string; path: string; bytes: number; active: boolean };
@@ -490,6 +491,7 @@ function VoiceInputSettings() {
   useEffect(() => {
     if (state?.settings) {
       publishHotkeyConfig(hotkeyFromSettings(state.settings));
+      publishDictationBehavior(dictationBehaviorFromSettings(state.settings));
     }
   }, [state?.settings]);
 
@@ -538,6 +540,9 @@ function VoiceInputSettings() {
         "hotkeyWinMeta" in patch
       ) {
         publishHotkeyConfig(hotkeyFromSettings({ ...(state?.settings ?? {}), ...patch }));
+      }
+      if ("autoSend" in patch || "silenceStopSeconds" in patch || "livePreview" in patch) {
+        publishDictationBehavior(dictationBehaviorFromSettings({ ...(state?.settings ?? {}), ...patch }));
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -757,6 +762,31 @@ function VoiceInputSettings() {
             platform="windows"
             title={t.dictation.hotkeyWindows}
             hint={t.dictation.hotkeyWindowsHint}
+          />
+          <Toggle
+            label={t.dictation.autoSend}
+            hint={t.dictation.autoSendHint}
+            checked={values.autoSend === true}
+            onChange={(next) => void save({ autoSend: next })}
+          />
+          <Row label={t.dictation.silenceStop} hint={t.dictation.silenceStopHint}>
+            <Select
+              value={String(values.silenceStopSeconds ?? 0)}
+              options={[
+                { value: "0", label: t.dictation.silenceStopOff },
+                ...["1", "1.5", "2", "3", "5"].map((seconds) => ({
+                  value: seconds,
+                  label: t.dictation.silenceStopSeconds(Number(seconds)),
+                })),
+              ]}
+              onChange={(next) => void save({ silenceStopSeconds: Number(next) })}
+            />
+          </Row>
+          <Toggle
+            label={t.dictation.livePreview}
+            hint={t.dictation.livePreviewHint}
+            checked={values.livePreview === true}
+            onChange={(next) => void save({ livePreview: next })}
           />
           <Toggle
             label={t.dictation.fillers}

@@ -57,6 +57,14 @@ export type Dictionary = {
     hotkeyPresetWinAltLeft: string;
     hotkeyPresetWinCapsLock: string;
     hotkeyPresetWinF8: string;
+    autoSend: string;
+    autoSendHint: string;
+    silenceStop: string;
+    silenceStopHint: string;
+    silenceStopOff: string;
+    silenceStopSeconds: (seconds: number) => string;
+    livePreview: string;
+    livePreviewHint: string;
   };
 
   vocabulary: {

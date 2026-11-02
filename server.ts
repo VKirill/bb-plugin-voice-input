@@ -147,6 +147,7 @@ export const rpcContract = defineRpcContract({
       filename: z.string().optional(),
       prompt: z.string().nullable().optional(),
       uiLanguage: z.enum(UI_LANGUAGES).optional(),
+      preview: z.boolean().optional(),
     }),
     output: z.object({
       ok: z.boolean(),
@@ -524,6 +525,7 @@ export default async function plugin(bb: BbPluginApi) {
     filename?: string;
     prompt?: string | null;
     uiLanguage?: UiLanguage;
+    preview?: boolean;
   }) {
     const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
     return await host.call(
@@ -535,6 +537,7 @@ export default async function plugin(bb: BbPluginApi) {
         prompt: input.prompt,
         uiLanguage: input.uiLanguage,
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
+        preview: input.preview,
       },
       { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
     );

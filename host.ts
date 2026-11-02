@@ -268,7 +268,13 @@ type TranscriptionOutcome = {
 async function runTranscription(
   paths: HostPaths,
   config: VoiceConfig,
-  args: { audioPath: string; savedPath: string | null; prompt: string | null; timeoutMs: number },
+  args: {
+    audioPath: string;
+    savedPath: string | null;
+    prompt: string | null;
+    timeoutMs: number;
+    preview?: boolean;
+  },
 ): Promise<TranscriptionOutcome> {
   const started = Date.now();
   let rawText: string;
@@ -364,7 +370,12 @@ async function runTranscription(
     }
   }
 
-  const text = await postprocess(rawText, config, () => {});
+  // Черновой прогон для живого предпросмотра: без второго прохода ИИ.
+  const text = await postprocess(
+    rawText,
+    args.preview ? { ...config, aiPass: { ...config.aiPass, enabled: false } } : config,
+    () => {},
+  );
   if (!text.trim()) {
     throw new Error(dictionary(config.uiLanguage).system.noSpeech);
   }
@@ -374,6 +385,9 @@ async function runTranscription(
     rawText,
     text,
   };
+  if (args.preview) {
+    return outcome;
+  }
 
   await appendHistory(paths, {
     id: randomUUID(),
@@ -397,6 +411,7 @@ async function executeAudioTranscription(
     prompt?: string | null;
     timeoutMs?: number;
     uiLanguage?: string;
+    preview?: boolean;
   },
   tempDir: string,
 ): Promise<{ ok: true; model: string; text: string } | { ok: false; code: "timeout" | "request_failed"; message: string }> {
@@ -405,7 +420,12 @@ async function executeAudioTranscription(
   const audio = Buffer.from(input.audioBase64, "base64");
   const extension = extensionFor(input.filename ?? "recording.webm", input.mimeType);
 
-  const savedPath = config.saveRecordings
+  // Предпросмотр гоняет запись много раз за диктовку: облаку это стоило бы денег.
+  if (input.preview && (config.engine === "openai" || config.engine === "google" || config.engine === "groq")) {
+    return { ok: false as const, code: "request_failed" as const, message: "Live preview needs a local engine." };
+  }
+
+  const savedPath = config.saveRecordings && !input.preview
     ? await keepRecording(paths, audio, extension)
     : null;
 
@@ -422,6 +442,7 @@ async function executeAudioTranscription(
       savedPath,
       prompt: input.prompt ?? null,
       timeoutMs: input.timeoutMs ?? 600_000,
+      preview: input.preview,
     });
     return { ok: true as const, model: outcome.engine, text: outcome.text };
   } catch (error) {
@@ -432,6 +453,10 @@ async function executeAudioTranscription(
       message:
         message === "timeout" ? dictionary(config.uiLanguage).system.transcribeTimeout : message,
     };
+  } finally {
+    if (input.preview && !savedPath) {
+      await rm(audioPath, { force: true }).catch(() => {});
+    }
   }
 }
 

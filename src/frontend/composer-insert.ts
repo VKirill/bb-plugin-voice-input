@@ -155,3 +155,33 @@ export function insertTranscriptAtCaret(editor: HTMLElement, transcript: string,
   rememberComposerCaret(planned.offset + planned.piece.length);
   return { text: planned.text, piece: planned.piece };
 }
+
+export const COMPOSER_SEND_SELECTOR =
+  '[data-promptbox] button[type="submit"][data-promptbox-submit-action]';
+
+/**
+ * Нажать «Отправить» композера, когда он примет вставленный текст.
+ * Редактор обновляет состояние асинхронно, поэтому кнопка может быть ещё
+ * выключена сразу после вставки — ждём её недолго.
+ */
+export function submitComposerWhenReady(expectedText: string, timeoutMs = 1500): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve) => {
+    const attempt = () => {
+      const editor = findComposerEditor();
+      const button = document.querySelector<HTMLButtonElement>(COMPOSER_SEND_SELECTOR);
+      const hasText = editor ? getComposerPlainText(editor).includes(expectedText.trim()) : false;
+      if (button && !button.disabled && hasText) {
+        button.click();
+        resolve(true);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        resolve(false);
+        return;
+      }
+      window.setTimeout(attempt, 100);
+    };
+    window.setTimeout(attempt, 50);
+  });
+}

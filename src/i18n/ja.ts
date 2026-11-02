@@ -56,6 +56,14 @@ export const ja: Dictionary = {
     hotkeyPresetWinAltLeft: "左 Alt",
     hotkeyPresetWinCapsLock: "Caps Lock",
     hotkeyPresetWinF8: "F8",
+    autoSend: "自動送信",
+    autoSendHint: "文字起こしが挿入されたらすぐにメッセージを送信します。",
+    silenceStop: "無音で停止",
+    silenceStopHint: "話し始めた後、この長さの無音で録音を停止します。ショートカットキーを押している間は録音を続けます。",
+    silenceStopOff: "オフ",
+    silenceStopSeconds: (seconds) => `${seconds} 秒後`,
+    livePreview: "ライブプレビュー",
+    livePreviewHint: "話している間、認識済みのテキストを表示します。ローカルエンジン(Whisper、GigaAM)のみ。毎秒マシンを使用します。",
   },
 
   vocabulary: {

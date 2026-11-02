@@ -10,7 +10,15 @@ import {
   insertIntoDraftText,
   insertTranscriptAtCaret,
   resolveComposerInsertOffset,
+  submitComposerWhenReady,
 } from "./composer-insert.ts";
+import {
+  createSilenceState,
+  readDictationBehavior,
+  silenceStep,
+  type DictationBehavior,
+  type SilenceState,
+} from "./dictation-behavior.ts";
 import { frontendLanguage, words } from "./words.ts";
 
 export type VoiceRecordingState = "idle" | "recording" | "transcribing" | "error";
@@ -30,6 +38,8 @@ export interface VoiceSessionSnapshot {
   levels: number[];
   target: VoiceTarget | null;
   error: string | null;
+  /** Черновая расшифровка уже сказанного; пусто, пока предпросмотр выключен. */
+  previewText: string;
 }
 
 export type TranscribeFunction = (args: {
@@ -38,7 +48,32 @@ export type TranscribeFunction = (args: {
   filename: string;
   prompt?: string | null;
   uiLanguage?: string;
+  preview?: boolean;
 }) => Promise<{ ok: boolean; text: string; error: string | null }>;
+
+const PREVIEW_INTERVAL_MS = 1000;
+const PREVIEW_MIN_AUDIO_MS = 1000;
+
+async function callTranscribeRpc(
+  data: Parameters<TranscribeFunction>[0],
+  signal: AbortSignal,
+): Promise<{ ok: boolean; text: string; error: string | null }> {
+  const res = await fetch("/api/v1/plugins/voice-input/rpc/transcribeAudio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    signal,
+  });
+  const rawJson: unknown = await res.json();
+  if (rawJson && typeof rawJson === "object" && "result" in rawJson) {
+    return (rawJson as { result: { ok: boolean; text: string; error: string | null } }).result;
+  }
+  return rawJson as { ok: boolean; text: string; error: string | null };
+}
+
+function extensionForMime(mimeType: string): string {
+  return mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+}
 
 function resolveAudioMimeType(): string {
   if (typeof MediaRecorder === "undefined") {
@@ -112,6 +147,7 @@ export class GlobalVoiceSession {
     levels: [0, 0, 0, 0, 0],
     target: null,
     error: null,
+    previewText: "",
   };
 
   private startedAtMs: number | null = null;
@@ -128,6 +164,15 @@ export class GlobalVoiceSession {
   private timerInterval: number | null = null;
   private animationFrame: number | null = null;
   private wakeLockSentinel: { release: () => Promise<void> } | null = null;
+
+  private behavior: DictationBehavior = readDictationBehavior();
+  private silence: SilenceState | null = null;
+  private autoStopSuppressed: () => boolean = () => false;
+  // Каждая запись получает свой номер: запоздавший ответ предпросмотра от
+  // прошлой записи не должен попасть в текущую.
+  private recordingId = 0;
+  private previewTimer: number | null = null;
+  private previewAbort: AbortController | null = null;
 
   private transcribeFn: TranscribeFunction | null = null;
   private navigateFn: ((threadId?: string) => void) | null = null;
@@ -195,6 +240,88 @@ export class GlobalVoiceSession {
     return Math.min(1, Math.max(0.08, boosted ** 0.65));
   };
 
+  /** Пока возвращает true (например, клавиша диктовки зажата), тишина запись не останавливает. */
+  public setAutoStopSuppressor(fn: () => boolean) {
+    this.autoStopSuppressed = fn;
+  }
+
+  private readRms(): number {
+    if (!this.analyser || !this.timeData) return 0;
+    this.analyser.getByteTimeDomainData(this.timeData);
+    let sumSquares = 0;
+    for (let i = 0; i < this.timeData.length; i++) {
+      const centered = ((this.timeData[i] ?? 128) - 128) / 128;
+      sumSquares += centered * centered;
+    }
+    return Math.sqrt(sumSquares / this.timeData.length);
+  }
+
+  private checkSilence(now: number) {
+    if (!this.silence) return;
+    const step = silenceStep(this.silence, this.readRms(), now, this.behavior.silenceStopSeconds);
+    this.silence = step.state;
+    if (step.stop && !this.autoStopSuppressed()) {
+      this.silence = null;
+      void this.stopAndTranscribe();
+    }
+  }
+
+  private schedulePreview(recordingId: number) {
+    if (!this.behavior.livePreview) return;
+    this.previewTimer = window.setTimeout(() => {
+      this.previewTimer = null;
+      void this.runPreview(recordingId);
+    }, PREVIEW_INTERVAL_MS);
+  }
+
+  private async runPreview(recordingId: number) {
+    if (recordingId !== this.recordingId || this.snapshot.state !== "recording") return;
+    // Whisper hallucinates on pure silence ("Thank you."), so wait for speech when we can measure it.
+    const heardSpeech = !this.analyser || (this.silence?.speechMs ?? 0) > 0;
+    if (!heardSpeech || this.getDurationMs() < PREVIEW_MIN_AUDIO_MS || this.recordedChunks.length === 0) {
+      this.schedulePreview(recordingId);
+      return;
+    }
+    // Куски MediaRecorder склеиваются в валидный файл: заголовок в первом.
+    const blob = new Blob(this.recordedChunks, { type: this.mimeType });
+    const controller = new AbortController();
+    this.previewAbort = controller;
+    try {
+      const result = await callTranscribeRpc(
+        {
+          audioBase64: await blobToBase64(blob),
+          mimeType: this.mimeType,
+          filename: `preview.${extensionForMime(this.mimeType)}`,
+          prompt: this.snapshot.target?.promptContext ?? null,
+          uiLanguage: frontendLanguage(),
+          preview: true,
+        },
+        controller.signal,
+      );
+      if (recordingId !== this.recordingId || this.snapshot.state !== "recording") return;
+      if (result.ok && result.text.trim()) {
+        this.updateSnapshot({ previewText: result.text.trim() });
+      } else if (result.error && /local engine/i.test(result.error)) {
+        // Облачный движок: предпросмотр недоступен, дальше не пробуем.
+        return;
+      }
+    } catch {
+      // Предпросмотр необязателен: сбой не мешает основной расшифровке.
+    } finally {
+      if (this.previewAbort === controller) this.previewAbort = null;
+    }
+    this.schedulePreview(recordingId);
+  }
+
+  private stopPreview() {
+    if (this.previewTimer !== null) {
+      window.clearTimeout(this.previewTimer);
+      this.previewTimer = null;
+    }
+    this.previewAbort?.abort();
+    this.previewAbort = null;
+  }
+
   public setTranscribeFn(fn: TranscribeFunction | null) {
     this.transcribeFn = fn;
   }
@@ -217,12 +344,15 @@ export class GlobalVoiceSession {
     }
 
     this.recordedChunks = [];
+    this.behavior = readDictationBehavior();
+    const recordingId = ++this.recordingId;
     this.updateSnapshot({
       state: "recording",
       target,
       durationMs: 0,
       levels: [0, 0, 0, 0, 0],
       error: null,
+      previewText: "",
     });
 
     try {
@@ -277,6 +407,8 @@ export class GlobalVoiceSession {
       recorder.start(250);
 
       this.startedAtMs = Date.now();
+      this.silence = createSilenceState(this.startedAtMs);
+      this.schedulePreview(recordingId);
 
       this.timerInterval = window.setInterval(() => {
         if (this.startedAtMs !== null) {
@@ -302,6 +434,7 @@ export class GlobalVoiceSession {
             durationMs: Date.now() - this.startedAtMs,
             levels: nextLevels,
           });
+          this.checkSilence(Date.now());
         }
       }, 200);
 
@@ -345,7 +478,10 @@ export class GlobalVoiceSession {
     const currentTarget = this.snapshot.target;
     const recorder = this.mediaRecorder;
     const duration = this.getDurationMs();
+    const autoSend = this.behavior.autoSend;
 
+    this.recordingId += 1;
+    this.stopPreview();
     this.updateSnapshot({ state: "transcribing" });
 
     await new Promise<void>((resolve) => {
@@ -373,7 +509,7 @@ export class GlobalVoiceSession {
     this.cleanupAudio();
 
     if (duration < 500 || this.recordedChunks.length === 0) {
-      this.updateSnapshot({ state: "idle", target: null });
+      this.updateSnapshot({ state: "idle", target: null, previewText: "" });
       toast.error(words().voice.tooShort);
       return;
     }
@@ -383,11 +519,7 @@ export class GlobalVoiceSession {
 
     try {
       const audioBase64 = await blobToBase64(blob);
-      const ext = this.mimeType.includes("mp4")
-        ? "m4a"
-        : this.mimeType.includes("ogg")
-          ? "ogg"
-          : "webm";
+      const ext = extensionForMime(this.mimeType);
 
       const fn =
         customTranscribeFn ||
@@ -396,17 +528,7 @@ export class GlobalVoiceSession {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 60_000);
           try {
-            const res = await fetch("/api/v1/plugins/voice-input/rpc/transcribeAudio", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(data),
-              signal: controller.signal,
-            });
-            const rawJson: unknown = await res.json();
-            if (rawJson && typeof rawJson === "object" && "result" in rawJson) {
-              return (rawJson as { result: { ok: boolean; text: string; error: string | null } }).result;
-            }
-            return rawJson as { ok: boolean; text: string; error: string | null };
+            return await callTranscribeRpc(data, controller.signal);
           } finally {
             clearTimeout(timer);
           }
@@ -436,16 +558,16 @@ export class GlobalVoiceSession {
             ? String((payload.error as { message: unknown }).message)
             : null;
 
-      this.updateSnapshot({ state: "idle", target: null });
+      this.updateSnapshot({ state: "idle", target: null, previewText: "" });
 
       if (!isOk || !text) {
         toast.error(errorMessage || words().voice.notRecognized);
         return;
       }
 
-      this.deliverTranscript(text, currentTarget);
+      this.deliverTranscript(text, currentTarget, autoSend);
     } catch (err) {
-      this.updateSnapshot({ state: "idle", target: null });
+      this.updateSnapshot({ state: "idle", target: null, previewText: "" });
       const msg =
         err instanceof DOMException && err.name === "AbortError"
           ? words().voice.timeout
@@ -511,7 +633,7 @@ export class GlobalVoiceSession {
     }
   }
 
-  private deliverTranscript(text: string, target: VoiceTarget | null) {
+  private deliverTranscript(text: string, target: VoiceTarget | null, autoSend = false) {
     if (!target) return;
 
     const currentPath = window.location.pathname;
@@ -553,8 +675,10 @@ export class GlobalVoiceSession {
         const nextEditor = findComposerEditor();
         if (!nextEditor) return;
         const currentContent = getComposerPlainText(nextEditor);
-        if (currentContent.includes(text)) return;
-        insertTranscriptAtCaret(nextEditor, text, resolveComposerInsertOffset(currentContent.length));
+        if (!currentContent.includes(text)) {
+          insertTranscriptAtCaret(nextEditor, text, resolveComposerInsertOffset(currentContent.length));
+        }
+        if (autoSend) void submitComposerWhenReady(text);
       }, 350);
     } else {
       if (editor) {
@@ -563,17 +687,26 @@ export class GlobalVoiceSession {
       } else {
         this.persistDraftInsert(target, text, offset);
       }
-      toast.success(words().voice.pasted);
+      if (autoSend) {
+        void submitComposerWhenReady(text).then((sent) => {
+          if (!sent) toast.success(words().voice.pasted);
+        });
+      } else {
+        toast.success(words().voice.pasted);
+      }
     }
   }
 
   public cancelRecording() {
+    this.recordingId += 1;
+    this.stopPreview();
     this.cleanupAudio();
     this.recordedChunks = [];
-    this.updateSnapshot({ state: "idle", target: null, error: null });
+    this.updateSnapshot({ state: "idle", target: null, error: null, previewText: "" });
   }
 
   private cleanupAudio() {
+    this.silence = null;
     if (this.timerInterval !== null) {
       window.clearInterval(this.timerInterval);
       this.timerInterval = null;
@@ -606,6 +739,15 @@ export class GlobalVoiceSession {
     }
     this.mediaRecorder = null;
     this.startedAtMs = null;
+  }
+
+  /** Обновить настройки поведения; действует и на уже идущую запись. */
+  public setBehavior(behavior: DictationBehavior) {
+    const previewTurnedOn = behavior.livePreview && !this.behavior.livePreview;
+    this.behavior = behavior;
+    if (previewTurnedOn && this.snapshot.state === "recording" && this.previewTimer === null && !this.previewAbort) {
+      this.schedulePreview(this.recordingId);
+    }
   }
 }
 

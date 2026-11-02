@@ -57,6 +57,14 @@ export const en: Dictionary = {
     hotkeyPresetWinAltLeft: "Left Alt",
     hotkeyPresetWinCapsLock: "Caps Lock",
     hotkeyPresetWinF8: "F8",
+    autoSend: "Send automatically",
+    autoSendHint: "Send the message as soon as the transcript is inserted, without pressing Send.",
+    silenceStop: "Stop on silence",
+    silenceStopHint: "After you start speaking, stop recording after this much silence. Holding the shortcut key keeps recording.",
+    silenceStopOff: "Off",
+    silenceStopSeconds: (seconds) => `After ${seconds} s`,
+    livePreview: "Live preview",
+    livePreviewHint: "Show what has been recognized so far while you speak. Local engines only (Whisper, GigaAM); uses the machine's CPU/GPU every second.",
   },
 
   vocabulary: {

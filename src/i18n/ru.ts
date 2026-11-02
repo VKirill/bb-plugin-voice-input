@@ -57,6 +57,14 @@ export const ru: Dictionary = {
     hotkeyPresetWinAltLeft: "Левый Alt",
     hotkeyPresetWinCapsLock: "Caps Lock",
     hotkeyPresetWinF8: "F8",
+    autoSend: "Отправлять сразу",
+    autoSendHint: "Отправить сообщение, как только расшифровка вставлена, без нажатия «Отправить».",
+    silenceStop: "Остановка по тишине",
+    silenceStopHint: "Когда вы начали говорить, запись остановится после такой паузы. Пока клавиша диктовки зажата, запись продолжается.",
+    silenceStopOff: "Выключено",
+    silenceStopSeconds: (seconds) => `Через ${seconds} с`,
+    livePreview: "Живой предпросмотр",
+    livePreviewHint: "Показывать уже распознанное, пока вы говорите. Только локальные движки (Whisper, GigaAM); раз в секунду нагружает процессор машины.",
   },
 
   vocabulary: {
