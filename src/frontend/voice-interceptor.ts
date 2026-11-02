@@ -340,6 +340,10 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }
     event.preventDefault();
     event.stopPropagation();
+    // A latched recording may have ended without the key (silence, mic click): start fresh.
+    if (pttState.mode === "latched" && globalVoiceSession.getSnapshot().state !== "recording") {
+      pttState = createPttState();
+    }
     const next = pttKeyDown(pttState, Date.now());
     pttState = next.state;
     clearPttTimer();
