@@ -774,7 +774,7 @@ function VoiceInputSettings() {
               value={String(values.silenceStopSeconds ?? 0)}
               options={[
                 { value: "0", label: t.dictation.silenceStopOff },
-                ...["1", "1.5", "2", "3", "5"].map((seconds) => ({
+                ...["1", "1.5", "2", "2.5", "3", "5"].map((seconds) => ({
                   value: seconds,
                   label: t.dictation.silenceStopSeconds(Number(seconds)),
                 })),
