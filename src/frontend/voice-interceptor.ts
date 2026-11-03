@@ -199,6 +199,13 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   const stopObservingLanguage = observeFrontendLanguage();
 
   let lastTriggerTime = 0;
+  let lastPointerDownAt = 0;
+  // A pointer click always follows its pointerdown, which already acted if it hit our button.
+  // If it started elsewhere, the click is a leftover from a tap on whatever was there before:
+  // on touch, bb sends on pointerup and swaps Send for the mic, and starting a recording puts
+  // the bar's buttons under the finger.
+  const isLeftoverClick = (event: Event, now = Date.now()) =>
+    event.type === "click" && (event as MouseEvent).detail > 0 && now - lastPointerDownAt < 1500;
   let barElement: HTMLElement | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let timerElement: HTMLElement | null = null;
@@ -246,13 +253,16 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   // Единый перехватчик событий клика/нажатия на микрофон
   const handleMicTrigger = (event: Event) => {
     const micButton = findVoiceButton(event.target);
+    const now = Date.now();
+    if (event.type === "pointerdown") lastPointerDownAt = now;
     if (!micButton) return;
 
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const now = Date.now();
+    if (isLeftoverClick(event, now)) return;
+
     if (now - lastTriggerTime < 350) return;
     lastTriggerTime = now;
 
@@ -449,6 +459,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      if (isLeftoverClick(e)) return;
       if (isCanceling) return;
       isCanceling = true;
       setTimeout(() => {
@@ -524,6 +535,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      if (isLeftoverClick(e)) return;
       if (isConfirming) return;
       isConfirming = true;
       setTimeout(() => {
