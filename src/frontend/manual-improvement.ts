@@ -85,7 +85,18 @@ export class ManualImprovement {
     this.clear(composer.key);
     this.insertions.set(composer.key, { before, piece: planned.piece, text: text.trim(), rawText, offset: planned.offset });
     try {
-      composer.insert(planned.piece);
+      if (planned.offset === before.length) composer.insert(planned.piece, { at: "end" });
+      else composer.replace((current) => {
+        if (current.text !== before) return current;
+        const offset = planned.offset;
+        // Do not split a mention pill at an arbitrary saved caret position.
+        if (current.mentions.some((item) => item.from < offset && item.to > offset)) return current;
+        return {
+          text: planned.text,
+          mentions: current.mentions.map((item) => item.from >= offset
+            ? { ...item, from: item.from + planned.piece.length, to: item.to + planned.piece.length } : item),
+        };
+      });
     } catch (error) {
       this.insertions.delete(composer.key);
       throw error;

@@ -195,3 +195,32 @@ test("submitting before insertion publication discards the deferred fragment", (
   controller.sync(handle);
   assert.equal(controller.get(handle.key), undefined);
 });
+
+test("dictation at the end explicitly avoids replacing a retained editor selection", () => {
+  const controller = new ManualImprovement();
+  const base = composer("selected-draft", "Keep selected text");
+  let options: unknown;
+  const handle = {
+    ...base, get draft() { return base.draft; },
+    insert(piece: string, nextOptions: unknown) {
+      options = nextOptions;
+      base.edit(base.draft.text + piece);
+    },
+  } as unknown as PluginComposerApi;
+  controller.register(handle);
+  assert.equal(controller.insertDictation("thread:thr_test", "dictated", "dictated"), true);
+  assert.deepEqual(options, { at: "end" });
+  assert.equal(base.draft.text, "Keep selected text dictated");
+});
+
+test("dictation at a saved offset inserts without deleting a selection and rebases mentions", () => {
+  const controller = new ManualImprovement();
+  const base = composer("middle-draft", "Keep selected text");
+  base.mention(14, 18);
+  const handle = { ...base, get draft() { return base.draft; }, insert() { throw new Error("Must not replace the cursor selection"); } } as unknown as PluginComposerApi;
+  controller.register(handle);
+  assert.equal(controller.insertDictation("thread:thr_test", "dictated", "dictated", 5), true);
+  assert.equal(base.draft.text, "Keep dictated selected text");
+  assert.equal(base.draft.mentions[0]!.from, 23);
+  assert.equal(base.draft.attachments[0], "keep");
+});

@@ -61,6 +61,10 @@ switching back restores the plugin recorder/hotkey panels and keeps their saved
 values. A confirmed change cancels an active plugin recording/transcription.
 Finish a recording before switching if its audio must be kept.
 
+Until recorder settings load successfully, microphone activation is blocked
+rather than silently falling through to another recorder/service. A click retries
+loading and shows the loading status if ownership is still unknown.
+
 Native mode does not mount the plugin's microphone click interception, floating
 recording bar or push-to-talk handlers. BB owns device selection, recording,
 cancel/stop/send and recording shortcuts. The text model and STT configuration

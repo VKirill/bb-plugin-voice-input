@@ -54,6 +54,34 @@ test("legacy server settings mount the plugin recorder rather than changing its 
   assert.equal(h.nativeClicks(), 0);
 });
 
+test("pending recorder settings block native microphone activation until ownership is known", async (t) => {
+  const h = setup(t);
+  let respond!: (value: Response) => void;
+  t.mock.method(globalThis, "fetch", async (url) => String(url).endsWith("/state")
+    ? await new Promise<Response>((resolve) => { respond = resolve; }) : Response.json({ uiLanguage: "en" }));
+  h.mount();
+  h.button.click();
+  assert.equal(h.nativeClicks(), 0);
+  assert.equal(h.pluginStarts(), 0);
+  respond(Response.json({ settings: { recorderMode: "native" } }));
+  await settle();
+  h.button.click();
+  assert.equal(h.nativeClicks(), 1);
+});
+
+test("failed recorder settings never silently select the native microphone", async (t) => {
+  const h = setup(t);
+  t.mock.method(globalThis, "fetch", async (url) => String(url).endsWith("/state")
+    ? new Response("unavailable", { status: 503 }) : Response.json({ uiLanguage: "en" }));
+  h.mount();
+  await settle();
+  h.button.click();
+  await settle();
+  assert.equal(h.nativeClicks(), 0);
+  assert.equal(h.pluginStarts(), 0);
+  assert.equal(getDictationSettings().ready, false);
+});
+
 test("confirmed recorder changes switch interception off and back on exactly once", async (t) => {
   const h = setup(t);
   t.mock.method(globalThis, "fetch", async () => Response.json({ uiLanguage: "en", settings: { recorderMode: "native" } }));

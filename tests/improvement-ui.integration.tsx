@@ -71,6 +71,26 @@ test("plugin transcription delivers through the registered composer and tracks i
   assert.equal(current.draft.text, "Keep. FastAPI!");
 });
 
+test("plugin manual delivery inserts at the saved offset without invoking cursor-selection replacement", async (t) => {
+  t.after(() => { cleanup(); manualImprovement.dispose(); document.body.replaceChildren(); });
+  window.history.replaceState(null, "", "/threads/thr_selection");
+  const slot = renderSlot({ component: Surface }, {}, {
+    pluginId: "voice-input", composer: {
+      text: "Keep selected text", scope: { kind: "thread", threadId: "thr_selection" },
+      attachments: [{ type: "localFile", path: "/data/note.txt", name: "note.txt" }],
+    },
+  });
+  t.mock.method(current, "insert", () => { throw new Error("Cursor insertion could replace selected text"); });
+  await act(async () => {
+    manualImprovement.insertDictation("thread:thr_selection", "dictated", "dictated", 5);
+  });
+  assert.equal(current.draft.text, "Keep dictated selected text");
+  assert.equal(current.draft.attachments.length, 1);
+  await act(async () => { await manualImprovement.improve(current, async () => "improved"); });
+  await act(async () => fireEvent.click(slot.getByRole("button", { name: "Undo improvement" })));
+  assert.equal(current.draft.text, "Keep dictated selected text");
+});
+
 test("manual plugin delivery to an unmounted destination never inserts into a different chat", async (t) => {
   t.after(() => { cleanup(); manualImprovement.dispose(); document.body.replaceChildren(); window.localStorage.clear(); });
   window.history.replaceState(null, "", "/threads/thr_elsewhere");
