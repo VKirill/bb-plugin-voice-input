@@ -119,6 +119,7 @@ export class GlobalVoiceSession {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
   private mimeType: string = "audio/webm";
+  private recordingGeneration = 0;
 
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -216,6 +217,7 @@ export class GlobalVoiceSession {
       return false;
     }
 
+    const generation = ++this.recordingGeneration;
     this.recordedChunks = [];
     this.updateSnapshot({
       state: "recording",
@@ -233,6 +235,11 @@ export class GlobalVoiceSession {
           autoGainControl: true,
         },
       });
+
+      if (generation !== this.recordingGeneration) {
+        for (const track of stream.getTracks()) track.stop();
+        return false;
+      }
 
       this.mediaStream = stream;
       this.mimeType = resolveAudioMimeType();
@@ -262,12 +269,14 @@ export class GlobalVoiceSession {
       this.mediaRecorder = recorder;
 
       recorder.ondataavailable = (event: BlobEvent) => {
+        if (generation !== this.recordingGeneration || this.mediaRecorder !== recorder) return;
         if (event.data && event.data.size > 0) {
           this.recordedChunks.push(event.data);
         }
       };
 
       recorder.onerror = () => {
+        if (generation !== this.recordingGeneration || this.mediaRecorder !== recorder) return;
         const msg = words().voice.micError;
         toast.error(msg);
         this.cleanupAudio();
@@ -310,7 +319,12 @@ export class GlobalVoiceSession {
           (navigator as unknown as { wakeLock: { request: (type: string) => Promise<unknown> } }).wakeLock
             .request("screen")
             .then((sentinel) => {
-              this.wakeLockSentinel = sentinel as { release: () => Promise<void> };
+              const lock = sentinel as { release: () => Promise<void> };
+              if (generation !== this.recordingGeneration) {
+                void lock.release().catch(() => {});
+              } else {
+                this.wakeLockSentinel = lock;
+              }
             })
             .catch(() => {});
         } catch {}
@@ -318,6 +332,7 @@ export class GlobalVoiceSession {
 
       return true;
     } catch (err) {
+      if (generation !== this.recordingGeneration) return false;
       this.cleanupAudio();
       let errorMsg = words().voice.micFailed;
       if (err instanceof DOMException) {
@@ -345,6 +360,7 @@ export class GlobalVoiceSession {
     const currentTarget = this.snapshot.target;
     const recorder = this.mediaRecorder;
     const duration = this.getDurationMs();
+    const generation = this.recordingGeneration;
 
     this.updateSnapshot({ state: "transcribing" });
 
@@ -370,7 +386,9 @@ export class GlobalVoiceSession {
       }
     });
 
+    if (generation !== this.recordingGeneration) return;
     this.cleanupAudio();
+    const transcriptionGeneration = this.recordingGeneration;
 
     if (duration < 500 || this.recordedChunks.length === 0) {
       this.updateSnapshot({ state: "idle", target: null });
@@ -383,6 +401,7 @@ export class GlobalVoiceSession {
 
     try {
       const audioBase64 = await blobToBase64(blob);
+      if (transcriptionGeneration !== this.recordingGeneration) return;
       const ext = this.mimeType.includes("mp4")
         ? "m4a"
         : this.mimeType.includes("ogg")
@@ -420,6 +439,8 @@ export class GlobalVoiceSession {
         uiLanguage: frontendLanguage(),
       });
 
+      if (transcriptionGeneration !== this.recordingGeneration) return;
+
       const payload: Record<string, unknown> =
         rawResult && typeof rawResult === "object" && "result" in rawResult && (rawResult as any).result && typeof (rawResult as any).result === "object"
           ? ((rawResult as any).result as Record<string, unknown>)
@@ -445,6 +466,7 @@ export class GlobalVoiceSession {
 
       this.deliverTranscript(text, currentTarget);
     } catch (err) {
+      if (transcriptionGeneration !== this.recordingGeneration) return;
       this.updateSnapshot({ state: "idle", target: null });
       const msg =
         err instanceof DOMException && err.name === "AbortError"
@@ -574,6 +596,20 @@ export class GlobalVoiceSession {
   }
 
   private cleanupAudio() {
+    this.recordingGeneration += 1;
+    const recorder = this.mediaRecorder;
+    this.mediaRecorder = null;
+    if (recorder) {
+      // Cancelled recorders must not append their final chunks to another session.
+      recorder.ondataavailable = null;
+      recorder.onerror = null;
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch {}
+      }
+    }
     if (this.timerInterval !== null) {
       window.clearInterval(this.timerInterval);
       this.timerInterval = null;
@@ -604,7 +640,6 @@ export class GlobalVoiceSession {
       }
       this.mediaStream = null;
     }
-    this.mediaRecorder = null;
     this.startedAtMs = null;
   }
 }
