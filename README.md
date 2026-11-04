@@ -2,6 +2,12 @@
 
 BB Voice Input adds speech transcription to BB chat. It can run Whisper or GigaAM on a recognition host, or send audio to Groq, OpenAI, or Google. Transcripts can be cleaned, matched against a vocabulary, and inserted into the original composer draft.
 
+Optional [contextual post-processing and recorder choice](docs/features/intent-postprocessing.md)
+add on-demand **Improve / Undo**, configurable speaker-intent editing, and BB's
+native microphone as an alternative to the plugin recorder. Existing recording
+and automatic-processing defaults are preserved. Requires **BB 0.48.1+ / SDK
+0.6.104+**; this proposal deliberately raises the minimum supported versions.
+
 ## Quick start
 
 ```sh
@@ -28,6 +34,8 @@ npm test
 npm run typecheck
 npm run build
 npm run test:host
+npm run test:ui
+npm run test:server
 ```
 
 ## Documentation

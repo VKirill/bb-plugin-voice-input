@@ -33,6 +33,11 @@ export type Dictionary = {
   };
 
   dictation: {
+    recorder: string;
+    recorderHint: string;
+    recorderPlugin: string;
+    recorderNative: string;
+    nativeRecorder: string;
     fillers: string;
     fillersHint: string;
     quotes: string;
@@ -69,6 +74,17 @@ export type Dictionary = {
     promptHint: string;
     aiPass: string;
     aiPassHint: string;
+    aiTrigger: string;
+    aiTriggerHint: string;
+    aiTriggerManual: string;
+    aiTriggerAutomatic: string;
+    aiMode: string;
+    aiModeHint: string;
+    aiModeTerms: string;
+    aiModeIntent: string;
+    aiPrompt: string;
+    aiPromptHint: string;
+    aiPromptReset: string;
     provider: string;
     providerCustom: string;
     model: string;
@@ -94,6 +110,11 @@ export type Dictionary = {
     keyFromCatalog: (name: string) => string;
     replace: string;
     save: string;
+  };
+
+  improvement: {
+    improve: string; busy: string; hint: string; changed: string; apply: string;
+    dismiss: string; undo: string; done: string; failed: string; mentions: string;
   };
 
   data: {

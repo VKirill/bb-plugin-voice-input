@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_SETTINGS, mergeSettings, sanitizePatch } from "../src/settings-store.ts";
+import { voiceConfigSchema } from "../src/contract.ts";
 
 test("лишний ключ от прежней версии не обнуляет остальные настройки", () => {
   const stored = {
@@ -52,4 +53,41 @@ test("старые настройки без hotkeyWin* оставляют ос�
   assert.equal(merged.hotkeyCode, "AltLeft");
   assert.equal(merged.hotkeyWinCode, "ControlRight");
   assert.equal(merged.hotkeyWinEnabled, true);
+});
+
+test("old AI settings remain in terms-only mode; intent and custom instructions can be saved", () => {
+  const migrated = mergeSettings({ aiPassEnabled: true, aiPassModel: "existing-model", vocabulary: "BB" });
+  assert.equal(migrated.aiPassMode, "terms");
+  assert.equal(migrated.aiPassPrompt, "");
+  assert.equal(migrated.aiPassModel, "existing-model");
+  assert.deepEqual(sanitizePatch({ aiPassMode: "intent", aiPassPrompt: "Сохраняй мой стиль." }), {
+    aiPassMode: "intent", aiPassPrompt: "Сохраняй мой стиль.",
+  });
+  assert.deepEqual(sanitizePatch({ aiPassMode: "unknown" }), {});
+  assert.deepEqual(sanitizePatch({ aiPassPrompt: "x".repeat(8001) }), {});
+});
+
+test("old host AI configuration gains defaults without resetting its endpoint or model", () => {
+  const legacy = {
+    enabled: true, baseUrl: "https://example.test/v1", model: "existing-model", apiKey: "", keyEnv: "",
+  };
+  const parsed = voiceConfigSchema.shape.aiPass.parse(legacy);
+  assert.deepEqual(parsed, { ...legacy, trigger: "automatic", mode: "terms", prompt: "" });
+});
+
+test("automatic post-processing remains the default for fresh and legacy settings", () => {
+  assert.equal(DEFAULT_SETTINGS.aiPassTrigger, "automatic");
+  assert.equal(mergeSettings({ aiPassEnabled: true }).aiPassTrigger, "automatic");
+  assert.deepEqual(sanitizePatch({ aiPassTrigger: "manual" }), { aiPassTrigger: "manual" });
+  assert.deepEqual(sanitizePatch({ aiPassTrigger: "always" }), {});
+});
+
+test("native recording is opt-in and stays out of the host voice configuration", () => {
+  assert.equal(DEFAULT_SETTINGS.recorderMode, "plugin");
+  assert.equal(mergeSettings({ vocabulary: "BB" }).recorderMode, "plugin");
+  assert.equal(mergeSettings({ recorderMode: "other", vocabulary: "BB" }).vocabulary, "BB");
+  assert.equal(mergeSettings({ recorderMode: "other" }).recorderMode, "plugin");
+  assert.deepEqual(sanitizePatch({ recorderMode: "native" }), { recorderMode: "native" });
+  assert.deepEqual(sanitizePatch({ recorderMode: "other" }), {});
+  assert.ok(!("recorderMode" in voiceConfigSchema.shape));
 });

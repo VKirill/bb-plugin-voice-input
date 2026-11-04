@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { ENGINE_IDS, LANGUAGES } from "./contract.ts";
 import { UI_LANGUAGES } from "./i18n/index.ts";
+import { AI_PASS_MODES, AI_PASS_PROMPT_LIMIT } from "./ai-pass-prompts.ts";
 
 export const WHISPER_MODELS: Record<string, string> = {
   "large-v3 4-bit (быстрее, рекомендуется)": "mlx-community/whisper-large-v3-mlx-4bit",
@@ -20,6 +21,7 @@ export const DEFAULT_WHISPER_MODEL = "large-v3 4-bit (быстрее, реком
 export const storedSettingsSchema = z
   .object({
     uiLanguage: z.enum(["auto", ...UI_LANGUAGES]),
+    recorderMode: z.enum(["plugin", "native"]),
     engine: z.enum(ENGINE_IDS),
     /**
      * Машина распознавания: id или имя из списка подключённых. Пусто — та, где
@@ -47,6 +49,9 @@ export const storedSettingsSchema = z
     groqKeyEnv: z.string(),
     groqKeyCatalog: z.string(),
     aiPassEnabled: z.boolean(),
+    aiPassTrigger: z.enum(["manual", "automatic"]),
+    aiPassMode: z.enum(AI_PASS_MODES),
+    aiPassPrompt: z.string().max(AI_PASS_PROMPT_LIMIT),
     aiPassBaseUrl: z.string(),
     aiPassModel: z.string(),
     aiPassKeyEnv: z.string(),
@@ -72,6 +77,7 @@ export type StoredSettings = z.infer<typeof storedSettingsSchema>;
 
 export const DEFAULT_SETTINGS: StoredSettings = {
   uiLanguage: "auto",
+  recorderMode: "plugin",
   engine: "whisper",
   machine: "",
   whisperModel: DEFAULT_WHISPER_MODEL,
@@ -94,6 +100,9 @@ export const DEFAULT_SETTINGS: StoredSettings = {
   groqKeyEnv: "",
   groqKeyCatalog: "",
   aiPassEnabled: false,
+  aiPassTrigger: "automatic",
+  aiPassMode: "terms",
+  aiPassPrompt: "",
   aiPassBaseUrl: "https://api.openai.com/v1",
   aiPassModel: "",
   aiPassKeyEnv: "",

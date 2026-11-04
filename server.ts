@@ -10,6 +10,8 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { nativeTranscriptReceipt } from "./src/native-transcript.ts";
 import { registerCompatibleAiService } from "./src/ai-service-compat.js";
 import {
   AI_SERVICE_ID,
@@ -151,8 +153,13 @@ export const rpcContract = defineRpcContract({
     output: z.object({
       ok: z.boolean(),
       text: z.string(),
+      rawText: z.string().optional(),
       error: z.string().nullable(),
     }),
+  },
+  improveText: {
+    input: managementContract.improveText.input,
+    output: managementContract.improveText.output,
   },
 });
 
@@ -226,6 +233,9 @@ export default async function plugin(bb: BbPluginApi) {
       },
       aiPass: {
         enabled: values.aiPassEnabled,
+        trigger: values.aiPassTrigger,
+        mode: values.aiPassMode,
+        prompt: values.aiPassPrompt,
         baseUrl: values.aiPassBaseUrl,
         model: values.aiPassModel,
         apiKey: "",
@@ -516,6 +526,14 @@ export default async function plugin(bb: BbPluginApi) {
         return { ok: false, text: "", error: describe(error) };
       }
     },
+    improveText: async (input) => {
+      try {
+        const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
+        return await host.call("improveText", input, { hostId, timeoutMs: 40_000 });
+      } catch (error) {
+        return { ok: false, text: "", error: describe(error) };
+      }
+    },
   });
 
   async function transcribeFromAudio(input: {
@@ -531,9 +549,9 @@ export default async function plugin(bb: BbPluginApi) {
       {
         audioBase64: input.audioBase64,
         mimeType: input.mimeType,
-        filename: input.filename,
-        prompt: input.prompt,
-        uiLanguage: input.uiLanguage,
+        ...(input.filename === undefined ? {} : { filename: input.filename }),
+        ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
+        ...(input.uiLanguage === undefined ? {} : { uiLanguage: input.uiLanguage }),
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
       },
       { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
@@ -560,6 +578,12 @@ export default async function plugin(bb: BbPluginApi) {
         });
         if (!result.ok) {
           throw new Error(result.error ?? "Transcription failed");
+        }
+        // Only a digest leaves the native voice path, and only when opted in.
+        // Other windows never receive the transcript or audio via realtime.
+        const values = await readSettings();
+        if (values.recorderMode === "native" && values.aiPassEnabled && values.aiPassTrigger === "manual") {
+          bb.realtime.publish("native-transcript", await nativeTranscriptReceipt(randomUUID(), result.text));
         }
         return result.text;
       },

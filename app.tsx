@@ -11,8 +11,11 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
+import { AI_PASS_PROMPT_LIMIT, DEFAULT_INTENT_PROMPT } from "./src/ai-pass-prompts";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
-import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
+import { publishDictationSettings } from "./src/frontend/dictation-settings";
+import { ImprovementAction, ImprovementBanner, improveDictation } from "./src/frontend/improvement-actions";
+import { mountRecorderLifecycle } from "./src/frontend/recorder-lifecycle";
 import { frontendLanguage, setFrontendLanguage, subscribeFrontendLanguage, words } from "./src/frontend/words";
 import {
   HOTKEY_PRESETS,
@@ -454,6 +457,7 @@ function VoiceInputSettings() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("general");
   const [busy, setBusy] = useState<string | null>(null);
   const [vocabularyDraft, setVocabularyDraft] = useState<string | null>(null);
+  const [aiPromptDraft, setAiPromptDraft] = useState<string | null>(null);
   const [diskModels, setDiskModels] = useState<DiskModel[]>([]);
   const [catalog, setCatalog] = useState<Catalog>(null);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -477,6 +481,7 @@ function VoiceInputSettings() {
       const next = (await rpc.call("state", { uiLanguage: frontendLanguage() })) as PageState;
       if (pendingSaves.current === 0 && revision === settingsRevision.current && request === refreshRequest.current) {
         setState(next);
+        publishDictationSettings(next.settings);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -739,25 +744,41 @@ function VoiceInputSettings() {
 
       {tab === "dictation" && (
         <div className="flex flex-col gap-3">
-          <HotkeySettings
-            t={t}
-            config={hotkeyFromSettings(values, "mac")}
-            onChange={(next) => void save(hotkeyToSettings(next, "mac"))}
-            presets={HOTKEY_PRESETS}
-            platform="mac"
-            title={t.dictation.hotkey}
-            hint={t.dictation.hotkeyHint}
-            note={t.dictation.hotkeyFnNote}
-          />
-          <HotkeySettings
-            t={t}
-            config={hotkeyFromSettings(values, "windows")}
-            onChange={(next) => void save(hotkeyToSettings(next, "windows"))}
-            presets={WINDOWS_HOTKEY_PRESETS}
-            platform="windows"
-            title={t.dictation.hotkeyWindows}
-            hint={t.dictation.hotkeyWindowsHint}
-          />
+          <Row label={t.dictation.recorder} hint={t.dictation.recorderHint}>
+            <Select
+              value={String(values.recorderMode ?? "plugin")}
+              options={[
+                { value: "plugin", label: t.dictation.recorderPlugin },
+                { value: "native", label: t.dictation.recorderNative },
+              ]}
+              onChange={(next) => void save({ recorderMode: next })}
+            />
+          </Row>
+          {values.recorderMode === "native" ? (
+            <p className="text-sm text-muted-foreground">{t.dictation.nativeRecorder}</p>
+          ) : (
+            <>
+              <HotkeySettings
+                t={t}
+                config={hotkeyFromSettings(values, "mac")}
+                onChange={(next) => void save(hotkeyToSettings(next, "mac"))}
+                presets={HOTKEY_PRESETS}
+                platform="mac"
+                title={t.dictation.hotkey}
+                hint={t.dictation.hotkeyHint}
+                note={t.dictation.hotkeyFnNote}
+              />
+              <HotkeySettings
+                t={t}
+                config={hotkeyFromSettings(values, "windows")}
+                onChange={(next) => void save(hotkeyToSettings(next, "windows"))}
+                presets={WINDOWS_HOTKEY_PRESETS}
+                platform="windows"
+                title={t.dictation.hotkeyWindows}
+                hint={t.dictation.hotkeyWindowsHint}
+              />
+            </>
+          )}
           <Toggle
             label={t.dictation.fillers}
             hint={t.dictation.fillersHint}
@@ -810,6 +831,49 @@ function VoiceInputSettings() {
           />
           {values.aiPassEnabled === true && (
             <div className="flex flex-col gap-2 rounded-lg border p-3">
+              <Row label={t.vocabulary.aiTrigger} hint={t.vocabulary.aiTriggerHint}>
+                <Select
+                  value={String(values.aiPassTrigger ?? "automatic")}
+                  options={[
+                    { value: "automatic", label: t.vocabulary.aiTriggerAutomatic },
+                    { value: "manual", label: t.vocabulary.aiTriggerManual },
+                  ]}
+                  onChange={(next) => void save({ aiPassTrigger: next })}
+                />
+              </Row>
+              <Row label={t.vocabulary.aiMode} hint={t.vocabulary.aiModeHint}>
+                <Select
+                  value={String(values.aiPassMode ?? "terms")}
+                  options={[
+                    { value: "terms", label: t.vocabulary.aiModeTerms },
+                    { value: "intent", label: t.vocabulary.aiModeIntent },
+                  ]}
+                  onChange={(next) => void save({ aiPassMode: next })}
+                />
+              </Row>
+              {values.aiPassMode === "intent" && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="voice-input-ai-prompt" className="text-sm">{t.vocabulary.aiPrompt}</label>
+                  <textarea
+                    id="voice-input-ai-prompt"
+                    className="min-h-48 w-full rounded-md border bg-background p-2 text-sm"
+                    maxLength={AI_PASS_PROMPT_LIMIT}
+                    value={aiPromptDraft ?? (String(values.aiPassPrompt ?? "") || DEFAULT_INTENT_PROMPT)}
+                    onChange={(event) => setAiPromptDraft(event.target.value)}
+                    onBlur={() => {
+                      if (aiPromptDraft !== null) void save({ aiPassPrompt: aiPromptDraft.trim() });
+                      setAiPromptDraft(null);
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground">{t.vocabulary.aiPromptHint}</span>
+                  <div>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setAiPromptDraft(null);
+                      void save({ aiPassPrompt: "" });
+                    }}>{t.vocabulary.aiPromptReset}</Button>
+                  </div>
+                </div>
+              )}
               {(() => {
                 const current =
                   AI_PASS_PROVIDERS.find(
@@ -1023,13 +1087,23 @@ function VoiceInputSettings() {
 }
 
 export default definePluginApp((app) => {
+  app.composer.customize({
+    id: "dictation-improvement",
+    scopes: ["thread", "new-thread"],
+    actions: [{ id: "improve-dictation", component: ImprovementAction }],
+    banners: [{ id: "improvement-result", chrome: "bare", component: ImprovementBanner }],
+  });
+  app.composer.experimental_registerCommand({
+    id: "improve-dictation", title: "Voice Input: Improve last dictation",
+    defaultShortcut: { key: "u", mod: true, shift: true }, run: ({ composer }) => improveDictation(composer),
+  });
   app.slots.settingsSection({
     id: "voice-input",
     component: VoiceInputSettings,
   });
 
   app.contentScripts.register({
-    id: "voice-input-interceptor",
-    mount: mountVoiceInputInterceptor,
+    id: "voice-input-lifecycle",
+    mount: mountRecorderLifecycle,
   });
 });
