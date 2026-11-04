@@ -82,16 +82,37 @@ export async function callDaemon(
   });
 }
 
+/**
+ * Жив ли демон. Мёртвым считаем только сокет, к которому нельзя подключиться:
+ * старый однопоточный демон, занятый распознаванием, принимает соединение,
+ * но отвечает на ping лишь после прогона. Такой демон занят, а не мёртв —
+ * удалить его сокет значило бы поднять вторую копию модели.
+ */
 async function isAlive(paths: HostPaths, engine: EngineId): Promise<boolean> {
   if (!existsSync(paths.socketPath(engine))) {
     return false;
   }
-  try {
-    const response = await callDaemon(paths, engine, { op: "ping" }, PING_TIMEOUT_MS);
-    return response.ok;
-  } catch {
-    return false;
-  }
+  return await new Promise<boolean>((resolve) => {
+    const connection = createConnection(paths.socketPath(engine));
+    let connected = false;
+    let buffer = "";
+    const done = (alive: boolean) => {
+      clearTimeout(timer);
+      connection.destroy();
+      resolve(alive);
+    };
+    const timer = setTimeout(() => done(connected), PING_TIMEOUT_MS);
+    connection.on("connect", () => {
+      connected = true;
+      connection.write(`${JSON.stringify({ op: "ping" })}\n`);
+    });
+    connection.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      if (buffer.includes("\n")) done(true);
+    });
+    connection.on("error", () => done(false));
+    connection.on("close", () => done(connected && buffer.includes("\n")));
+  });
 }
 
 /**

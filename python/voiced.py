@@ -28,18 +28,20 @@ SOCKET_BACKLOG = 8
 
 _engines: dict[str, object] = {}
 _lock = threading.Lock()
+_engines_lock = threading.Lock()
 _last_activity = time.monotonic()
 
 
 def _engine(engine_id: str):
-    engine = _engines.get(engine_id)
-    if engine is None:
-        factory = ENGINES.get(engine_id)
-        if factory is None:
-            raise EngineError(f"Неизвестный движок: {engine_id}")
-        engine = factory()
-        _engines[engine_id] = engine
-    return engine
+    with _engines_lock:
+        engine = _engines.get(engine_id)
+        if engine is None:
+            factory = ENGINES.get(engine_id)
+            if factory is None:
+                raise EngineError(f"Неизвестный движок: {engine_id}")
+            engine = factory()
+            _engines[engine_id] = engine
+        return engine
 
 
 def _handle(request: dict) -> dict:
@@ -132,17 +134,29 @@ def main() -> int:
 
     threading.Thread(target=_idle_watchdog, args=(server, socket_path), daemon=True).start()
 
+    stop = threading.Event()
+
+    def serve(connection: socket.socket) -> None:
+        try:
+            if _serve_client(connection):
+                stop.set()
+        except Exception as error:  # noqa: BLE001 — один клиент не роняет демон
+            print(json.dumps({"event": "error", "message": str(error)}), flush=True)
+
+    # Каждое соединение в своём потоке: пока идёт распознавание, ping должен
+    # отвечать сразу, иначе клиент сочтёт занятый демон мёртвым. Сами прогоны
+    # модели по-прежнему идут по одному под _lock.
+    server.settimeout(1.0)
     try:
-        while True:
+        while not stop.is_set():
             try:
                 connection, _ = server.accept()
+            except socket.timeout:
+                continue
             except OSError:
                 break
-            try:
-                if _serve_client(connection):
-                    break
-            except Exception as error:  # noqa: BLE001 — один клиент не роняет демон
-                print(json.dumps({"event": "error", "message": str(error)}), flush=True)
+            connection.settimeout(None)
+            threading.Thread(target=serve, args=(connection,), daemon=True).start()
     finally:
         server.close()
         socket_path.unlink(missing_ok=True)

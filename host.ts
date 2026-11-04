@@ -261,6 +261,37 @@ type TranscriptionOutcome = {
   text: string;
 };
 
+// Сколько локальных прогонов модели идёт прямо сейчас (демон обрабатывает их по одному).
+let localInferences = 0;
+const PREVIEW_BUSY = "Preview skipped: the model is busy.";
+
+async function runLocalInference(
+  paths: HostPaths,
+  config: VoiceConfig,
+  audioPath: string,
+  hint: string | null,
+  timeoutMs: number,
+): Promise<string> {
+  await ensureDaemon(paths, config.engine, DAEMON_IDLE_SECONDS, config.uiLanguage);
+  const response = await callDaemon(
+    paths,
+    config.engine,
+    {
+      op: "transcribe",
+      engine: config.engine,
+      model: config.whisperModel,
+      language: config.language,
+      audioPath,
+      prompt: hint,
+    },
+    timeoutMs,
+  );
+  if (!response.ok) {
+    throw new Error(response.message);
+  }
+  return response.text ?? "";
+}
+
 /**
  * Распознать файл, лежащий на этой машине, и привести текст в порядок.
  * Общий путь для голосового ввода BB и для проверки на готовом файле.
@@ -340,24 +371,17 @@ async function runTranscription(
       );
     }
   } else {
-    await ensureDaemon(paths, config.engine, DAEMON_IDLE_SECONDS, config.uiLanguage);
-    const response = await callDaemon(
-      paths,
-      config.engine,
-      {
-        op: "transcribe",
-        engine: config.engine,
-        model: config.whisperModel,
-        language: config.language,
-        audioPath: args.audioPath,
-        prompt: hint,
-      },
-      args.timeoutMs,
-    );
-    if (!response.ok) {
-      throw new Error(response.message);
+    // Модель одна и прогоны идут по очереди: предпросмотр не должен вставать
+    // в очередь перед итоговой расшифровкой, поэтому при занятой модели его пропускаем.
+    if (args.preview && localInferences > 0) {
+      throw new Error(PREVIEW_BUSY);
     }
-    rawText = response.text ?? "";
+    localInferences += 1;
+    try {
+      rawText = await runLocalInference(paths, config, args.audioPath, hint, args.timeoutMs);
+    } finally {
+      localInferences -= 1;
+    }
   }
 
   // Защита от галлюцинаций Whisper при тишине на записи:

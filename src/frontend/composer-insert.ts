@@ -159,19 +159,30 @@ export function insertTranscriptAtCaret(editor: HTMLElement, transcript: string,
 export const COMPOSER_SEND_SELECTOR =
   '[data-promptbox] button[type="submit"][data-promptbox-submit-action]';
 
+const normalizeDraft = (text: string) => text.replace(/\s+/g, " ").trim();
+
 /**
  * Нажать «Отправить» композера, когда он примет вставленный текст.
  * Редактор обновляет состояние асинхронно, поэтому кнопка может быть ещё
- * выключена сразу после вставки — ждём её недолго.
+ * выключена сразу после вставки — ждём её недолго. Отправляем только тот
+ * черновик, в который вставили текст: тот же адрес и ровно тот же текст.
  */
-export function submitComposerWhenReady(expectedText: string, timeoutMs = 1500): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+export function submitComposerWhenReady(
+  expectedDraft: string,
+  options: { pathname: string; isCurrent?: () => boolean; timeoutMs?: number },
+): Promise<boolean> {
+  const deadline = Date.now() + (options.timeoutMs ?? 1500);
+  const expected = normalizeDraft(expectedDraft);
   return new Promise((resolve) => {
     const attempt = () => {
+      if (window.location.pathname !== options.pathname || (options.isCurrent && !options.isCurrent())) {
+        resolve(false);
+        return;
+      }
       const editor = findComposerEditor();
       const button = document.querySelector<HTMLButtonElement>(COMPOSER_SEND_SELECTOR);
-      const hasText = editor ? getComposerPlainText(editor).includes(expectedText.trim()) : false;
-      if (button && !button.disabled && hasText) {
+      const sameDraft = editor ? normalizeDraft(getComposerPlainText(editor)) === expected : false;
+      if (expected && button && !button.disabled && sameDraft) {
         button.click();
         resolve(true);
         return;

@@ -171,6 +171,7 @@ export class GlobalVoiceSession {
   // Каждая запись получает свой номер: запоздавший ответ предпросмотра от
   // прошлой записи не должен попасть в текущую.
   private recordingId = 0;
+  private finalAbort: AbortController | null = null;
   private previewTimer: number | null = null;
   private previewAbort: AbortController | null = null;
 
@@ -480,7 +481,9 @@ export class GlobalVoiceSession {
     const duration = this.getDurationMs();
     const autoSend = this.behavior.autoSend;
 
-    this.recordingId += 1;
+    // Свой номер у итоговой расшифровки: отмена или новая запись делают её устаревшей.
+    const finalId = ++this.recordingId;
+    const isCurrent = () => finalId === this.recordingId;
     this.stopPreview();
     this.updateSnapshot({ state: "transcribing" });
 
@@ -507,6 +510,7 @@ export class GlobalVoiceSession {
     });
 
     this.cleanupAudio();
+    if (!isCurrent()) return;
 
     if (duration < 500 || this.recordedChunks.length === 0) {
       this.updateSnapshot({ state: "idle", target: null, previewText: "" });
@@ -521,11 +525,12 @@ export class GlobalVoiceSession {
       const audioBase64 = await blobToBase64(blob);
       const ext = extensionForMime(this.mimeType);
 
+      const controller = new AbortController();
+      this.finalAbort = controller;
       const fn =
         customTranscribeFn ||
         this.transcribeFn ||
         (async (data) => {
-          const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 60_000);
           try {
             return await callTranscribeRpc(data, controller.signal);
@@ -549,6 +554,8 @@ export class GlobalVoiceSession {
             ? (rawResult as Record<string, unknown>)
             : {};
 
+      if (!isCurrent()) return;
+      this.finalAbort = null;
       const isOk = payload.ok === true;
       const text = String(payload.text ?? "").trim();
       const errorMessage =
@@ -565,8 +572,10 @@ export class GlobalVoiceSession {
         return;
       }
 
-      this.deliverTranscript(text, currentTarget, autoSend);
+      this.deliverTranscript(text, currentTarget, autoSend, isCurrent);
     } catch (err) {
+      if (!isCurrent()) return;
+      this.finalAbort = null;
       this.updateSnapshot({ state: "idle", target: null, previewText: "" });
       const msg =
         err instanceof DOMException && err.name === "AbortError"
@@ -633,14 +642,21 @@ export class GlobalVoiceSession {
     }
   }
 
-  private deliverTranscript(text: string, target: VoiceTarget | null, autoSend = false) {
+  private deliverTranscript(
+    text: string,
+    target: VoiceTarget | null,
+    autoSend = false,
+    isCurrent: () => boolean = () => true,
+  ) {
     if (!target) return;
 
-    const currentPath = window.location.pathname;
-    const isCurrentlyInTarget =
-      target.kind === "thread" && target.threadId
-        ? currentPath.includes(target.threadId)
-        : !currentPath.includes("/threads/");
+    const isInTarget = () => {
+      const path = window.location.pathname;
+      return target.kind === "thread" && target.threadId
+        ? path.includes(target.threadId)
+        : !path.includes("/threads/");
+    };
+    const isCurrentlyInTarget = isInTarget();
 
     const editor = isCurrentlyInTarget ? findComposerEditor() : null;
     const liveText = editor ? getComposerPlainText(editor) : "";
@@ -672,23 +688,27 @@ export class GlobalVoiceSession {
       }
 
       setTimeout(() => {
+        // Пока шла навигация, человек мог уйти в другой чат: его черновик не трогаем.
+        if (!isCurrent() || !isInTarget()) return;
         const nextEditor = findComposerEditor();
         if (!nextEditor) return;
         const currentContent = getComposerPlainText(nextEditor);
-        if (!currentContent.includes(text)) {
-          insertTranscriptAtCaret(nextEditor, text, resolveComposerInsertOffset(currentContent.length));
-        }
-        if (autoSend) void submitComposerWhenReady(text);
+        const draft = currentContent.includes(text)
+          ? currentContent
+          : insertTranscriptAtCaret(nextEditor, text, resolveComposerInsertOffset(currentContent.length)).text;
+        if (autoSend) void submitComposerWhenReady(draft, { pathname: window.location.pathname, isCurrent });
       }, 350);
     } else {
+      let draft: string | null = null;
       if (editor) {
         const inserted = insertTranscriptAtCaret(editor, text, offset ?? liveText.length);
         this.persistDraftText(target, inserted.text);
+        draft = inserted.text;
       } else {
         this.persistDraftInsert(target, text, offset);
       }
-      if (autoSend) {
-        void submitComposerWhenReady(text).then((sent) => {
+      if (autoSend && draft !== null) {
+        void submitComposerWhenReady(draft, { pathname: window.location.pathname, isCurrent }).then((sent) => {
           if (!sent) toast.success(words().voice.pasted);
         });
       } else {
@@ -699,6 +719,8 @@ export class GlobalVoiceSession {
 
   public cancelRecording() {
     this.recordingId += 1;
+    this.finalAbort?.abort();
+    this.finalAbort = null;
     this.stopPreview();
     this.cleanupAudio();
     this.recordedChunks = [];
