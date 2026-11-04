@@ -85,7 +85,20 @@ def _handle(request: dict) -> dict:
     raise EngineError(f"Неизвестная операция: {op}")
 
 
-def _serve_client(connection: socket.socket) -> bool:
+def _release_socket(server: socket.socket, socket_path: Path, inode: int) -> None:
+    """Закрыть сервер и удалить свой сокет. Чужой (новый демон уже занял путь) не трогаем."""
+    try:
+        server.close()
+    except OSError:
+        pass
+    try:
+        if socket_path.stat().st_ino == inode:
+            socket_path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def _serve_client(connection: socket.socket, on_shutdown=None) -> bool:
     """Обслужить одно соединение. Возвращает True, если демон просили выйти."""
     with connection:
         connection.settimeout(3600)
@@ -102,18 +115,21 @@ def _serve_client(connection: socket.socket) -> bool:
             response = {"ok": False, "code": "request_failed", "message": str(error)}
         except Exception as error:  # noqa: BLE001 — любой сбой возвращаем клиенту
             response = {"ok": False, "code": "request_failed", "message": f"{type(error).__name__}: {error}"}
+        shutdown = bool(response.get("shutdown"))
+        # Освобождаем путь до ответа: клиент может сразу поднять новый демон.
+        if shutdown and on_shutdown is not None:
+            on_shutdown()
         connection.sendall((json.dumps(response, ensure_ascii=False) + "\n").encode("utf-8"))
-        return bool(response.get("shutdown"))
+        return shutdown
 
 
-def _idle_watchdog(server: socket.socket, socket_path: Path) -> None:
+def _idle_watchdog(server: socket.socket, socket_path: Path, inode: int) -> None:
     while True:
         time.sleep(30)
         if IDLE_TIMEOUT_SECONDS <= 0:
             continue
         if time.monotonic() - _last_activity > IDLE_TIMEOUT_SECONDS:
-            server.close()
-            socket_path.unlink(missing_ok=True)
+            _release_socket(server, socket_path, inode)
             os.kill(os.getpid(), signal.SIGTERM)
             return
 
@@ -130,15 +146,16 @@ def main() -> int:
     server.bind(str(socket_path))
     server.listen(SOCKET_BACKLOG)
     os.chmod(socket_path, 0o600)
+    inode = socket_path.stat().st_ino
     print(json.dumps({"event": "listening", "socket": str(socket_path)}), flush=True)
 
-    threading.Thread(target=_idle_watchdog, args=(server, socket_path), daemon=True).start()
+    threading.Thread(target=_idle_watchdog, args=(server, socket_path, inode), daemon=True).start()
 
     stop = threading.Event()
 
     def serve(connection: socket.socket) -> None:
         try:
-            if _serve_client(connection):
+            if _serve_client(connection, lambda: _release_socket(server, socket_path, inode)):
                 stop.set()
         except Exception as error:  # noqa: BLE001 — один клиент не роняет демон
             print(json.dumps({"event": "error", "message": str(error)}), flush=True)
@@ -158,8 +175,7 @@ def main() -> int:
             connection.settimeout(None)
             threading.Thread(target=serve, args=(connection,), daemon=True).start()
     finally:
-        server.close()
-        socket_path.unlink(missing_ok=True)
+        _release_socket(server, socket_path, inode)
     return 0
 
 

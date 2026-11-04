@@ -52,3 +52,44 @@ test("a dead daemon socket is still replaced", async () => {
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("a stopped daemon does not delete the socket of the daemon that replaced it", async () => {
+  const { spawn } = await import("node:child_process");
+  const { copyFile } = await import("node:fs/promises");
+  const { connect } = await import("node:net");
+  const { stopDaemon } = await import("../src/daemon.ts");
+
+  const dataDir = await mkdtemp(join(tmpdir(), "vi-"));
+  const paths = hostPaths(dataDir);
+  const socketPath = paths.socketPath("whisper");
+  await copyFile(join(import.meta.dirname, "..", "python", "voiced.py"), join(dataDir, "voiced.py"));
+  await writeFile(
+    join(dataDir, "engines.py"),
+    "class EngineError(Exception): pass\nclass TranscriptionRequest: pass\nENGINES = {}\n",
+  );
+  const daemon = spawn("python3", [join(dataDir, "voiced.py"), socketPath], { stdio: "ignore" });
+  const exited = new Promise((resolve) => daemon.once("exit", resolve));
+  const replacement = createServer();
+  try {
+    for (let i = 0; i < 100 && !existsSync(socketPath); i++) await new Promise((r) => setTimeout(r, 50));
+    assert.ok(existsSync(socketPath), "daemon did not start");
+
+    await stopDaemon(paths, "whisper");
+    // A replacement takes the path right away, before the old process has exited.
+    await new Promise<void>((resolve) => replacement.listen(socketPath, resolve));
+    await exited;
+
+    assert.ok(existsSync(socketPath), "old daemon unlinked the replacement's socket");
+    await new Promise<void>((resolve, reject) => {
+      const client = connect(socketPath, () => {
+        client.end();
+        resolve();
+      });
+      client.on("error", reject);
+    });
+  } finally {
+    daemon.kill();
+    await new Promise((resolve) => replacement.close(resolve));
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
