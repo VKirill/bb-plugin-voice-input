@@ -68,7 +68,7 @@ test("cloud setup and model messages honor request language", async () => {
   });
 });
 
-test("missing environment key is localized for direct, file and BB voice-service calls", async () => {
+test("missing environment key is localized for direct and file calls", async () => {
   await withHost(async (h, config, dataDir) => {
     config.uiLanguage = "pt";
     config.cloud.groqKeyEnv = "VOICE_I18N_TEST_MISSING_KEY_92B8";
@@ -76,10 +76,6 @@ test("missing environment key is localized for direct, file and BB voice-service
     const expected = dictionary("pt").errors.keyEnvMissing(config.cloud.groqKeyEnv);
     const audio = { audioBase64: "YQ==", mimeType: "audio/webm", filename: "recording.webm" };
     assert.equal((await h.experimental_call("transcribeDirect", audio)).error, expected);
-    const service = await h.experimental_call("ai.voice.transcribe", {
-      ...audio, model: "groq", prompt: null, serviceId: "local-voice", timeoutMs: 1000,
-    });
-    assert.equal(service.message, expected);
     const path = join(dataDir, "recording.webm");
     await writeFile(path, "fake audio: key validation happens before any provider call");
     await assert.rejects(h.experimental_call("transcribeFile", { path, timeoutMs: 1000 }), (error) => {

@@ -12,6 +12,10 @@ import {
   resolveComposerInsertOffset,
 } from "./composer-insert.ts";
 import { frontendLanguage, words } from "./words.ts";
+import { manualImprovement } from "./manual-improvement.ts";
+import { captureComposerDestination, currentComposerRoute, deliverToComposer, type ComposerDestination } from "./composer-delivery.ts";
+import { createSilenceState, readDictationBehavior, silenceStep, type DictationBehavior, type SilenceState } from "./dictation-behavior.ts";
+import { getDictationSettings, manualEditingEnabled } from "./dictation-settings.ts";
 
 export type VoiceRecordingState = "idle" | "recording" | "transcribing" | "error";
 
@@ -38,7 +42,7 @@ export type TranscribeFunction = (args: {
   filename: string;
   prompt?: string | null;
   uiLanguage?: string;
-}) => Promise<{ ok: boolean; text: string; error: string | null }>;
+}) => Promise<{ ok: boolean; text: string; rawText?: string; error: string | null }>;
 
 function resolveAudioMimeType(): string {
   if (typeof MediaRecorder === "undefined") {
@@ -120,6 +124,11 @@ export class GlobalVoiceSession {
   private recordedChunks: Blob[] = [];
   private mimeType: string = "audio/webm";
   private recordingGeneration = 0;
+  private behavior: DictationBehavior = readDictationBehavior();
+  private silence: SilenceState | null = null;
+  private autoStopSuppressed: () => boolean = () => false;
+  private finalAbort: AbortController | null = null;
+  private composerDestination: ComposerDestination | null = null;
 
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -196,6 +205,32 @@ export class GlobalVoiceSession {
     return Math.min(1, Math.max(0.08, boosted ** 0.65));
   };
 
+  /** Пока возвращает true (например, клавиша диктовки зажата), тишина запись не останавливает. */
+  public setAutoStopSuppressor(fn: () => boolean) {
+    this.autoStopSuppressed = fn;
+  }
+
+  private readRms(): number {
+    if (!this.analyser || !this.timeData) return 0;
+    this.analyser.getByteTimeDomainData(this.timeData);
+    let sumSquares = 0;
+    for (let i = 0; i < this.timeData.length; i++) {
+      const centered = ((this.timeData[i] ?? 128) - 128) / 128;
+      sumSquares += centered * centered;
+    }
+    return Math.sqrt(sumSquares / this.timeData.length);
+  }
+
+  private checkSilence(now: number) {
+    if (!this.silence) return;
+    const step = silenceStep(this.silence, this.readRms(), now, this.behavior.silenceStopSeconds);
+    this.silence = step.state;
+    if (step.stop && !this.autoStopSuppressed()) {
+      this.silence = null;
+      void this.stopAndTranscribe();
+    }
+  }
+
   public setTranscribeFn(fn: TranscribeFunction | null) {
     this.transcribeFn = fn;
   }
@@ -218,6 +253,9 @@ export class GlobalVoiceSession {
     }
 
     const generation = ++this.recordingGeneration;
+    this.behavior = readDictationBehavior();
+    this.composerDestination = captureComposerDestination(target);
+    if (this.composerDestination) manualImprovement.clear(this.composerDestination.key);
     this.recordedChunks = [];
     this.updateSnapshot({
       state: "recording",
@@ -286,6 +324,7 @@ export class GlobalVoiceSession {
       recorder.start(250);
 
       this.startedAtMs = Date.now();
+      this.silence = createSilenceState(this.startedAtMs);
 
       this.timerInterval = window.setInterval(() => {
         if (this.startedAtMs !== null) {
@@ -311,6 +350,7 @@ export class GlobalVoiceSession {
             durationMs: Date.now() - this.startedAtMs,
             levels: nextLevels,
           });
+          this.checkSilence(Date.now());
         }
       }, 200);
 
@@ -361,6 +401,9 @@ export class GlobalVoiceSession {
     const recorder = this.mediaRecorder;
     const duration = this.getDurationMs();
     const generation = this.recordingGeneration;
+    const destination = this.composerDestination;
+    const settings = getDictationSettings();
+    const autoSend = settings.ready && this.behavior.autoSend && !(settings.aiPassEnabled && (settings.aiPassTrigger === "manual" || settings.aiPassMode === "intent"));
 
     this.updateSnapshot({ state: "transcribing" });
 
@@ -408,11 +451,12 @@ export class GlobalVoiceSession {
           ? "ogg"
           : "webm";
 
+      const controller = new AbortController();
+      this.finalAbort = controller;
       const fn =
         customTranscribeFn ||
         this.transcribeFn ||
         (async (data) => {
-          const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 60_000);
           try {
             const res = await fetch("/api/v1/plugins/voice-input/rpc/transcribeAudio", {
@@ -464,9 +508,12 @@ export class GlobalVoiceSession {
         return;
       }
 
-      this.deliverTranscript(text, currentTarget);
+      this.finalAbort = null;
+      await this.deliverTranscript(text, currentTarget, typeof payload.rawText === "string" ? payload.rawText : text,
+        destination, autoSend, () => transcriptionGeneration === this.recordingGeneration);
     } catch (err) {
       if (transcriptionGeneration !== this.recordingGeneration) return;
+      this.finalAbort = null;
       this.updateSnapshot({ state: "idle", target: null });
       const msg =
         err instanceof DOMException && err.name === "AbortError"
@@ -533,14 +580,54 @@ export class GlobalVoiceSession {
     }
   }
 
-  private deliverTranscript(text: string, target: VoiceTarget | null) {
-    if (!target) return;
+  private async deliverTranscript(text: string, target: VoiceTarget | null, rawText: string = text,
+    destination: ComposerDestination | null = null, autoSend = false, isCurrent: () => boolean = () => true) {
+    if (!target || !isCurrent()) return;
 
-    const currentPath = window.location.pathname;
-    const isCurrentlyInTarget =
-      target.kind === "thread" && target.threadId
-        ? currentPath.includes(target.threadId)
-        : !currentPath.includes("/threads/");
+    if (destination) {
+      const offset = currentComposerRoute() === destination.route
+        ? resolveComposerInsertOffset(destination.composer.draft.text.length) : null;
+      const delivered = await deliverToComposer(destination, text, rawText,
+        { offset, autoSend, track: manualEditingEnabled(), isCurrent, canAutoSend: () => {
+          const settings = getDictationSettings();
+          return settings.ready && this.behavior.autoSend && !(settings.aiPassEnabled &&
+            (settings.aiPassTrigger === "manual" || settings.aiPassMode === "intent"));
+        } });
+      if (isCurrent()) {
+        if (delivered) toast.success(words().voice.pasted);
+        else toast.error(words().voice.destinationChanged);
+      }
+      return;
+    }
+    if (target.kind === "new-thread" && target.originPath && currentComposerRoute() !== target.originPath) {
+      toast.error(words().voice.destinationChanged);
+      return;
+    }
+
+    if (manualEditingEnabled()) {
+      const scope = target.kind === "thread" ? `thread:${target.threadId}` : `new-thread:${target.projectId ?? ""}`;
+      const onTarget = target.kind === "thread" && target.threadId
+        ? window.location.pathname.includes(target.threadId) : !window.location.pathname.includes("/threads/");
+      const targetEditor = onTarget ? findComposerEditor() : null;
+      const offset = targetEditor ? resolveComposerInsertOffset(getComposerPlainText(targetEditor).length) : null;
+      const insertion = manualImprovement.insertDictation(scope, text, rawText, offset);
+      if (insertion === "blocked") {
+        toast.error(words().improvement.mentions);
+        return;
+      }
+      if (insertion) {
+        toast.success(words().voice.pasted);
+        return;
+      }
+      this.deliverManualTranscript(text, rawText, target);
+      return;
+    }
+
+    const isInTarget = () => target.originPath ? currentComposerRoute() === target.originPath
+      : target.kind === "thread" && target.threadId
+        ? window.location.pathname.split("/").includes(target.threadId)
+        : !window.location.pathname.includes("/threads/");
+    const isCurrentlyInTarget = isInTarget();
 
     const editor = isCurrentlyInTarget ? findComposerEditor() : null;
     const liveText = editor ? getComposerPlainText(editor) : "";
@@ -572,6 +659,7 @@ export class GlobalVoiceSession {
       }
 
       setTimeout(() => {
+        if (!isCurrent() || !isInTarget()) return;
         const nextEditor = findComposerEditor();
         if (!nextEditor) return;
         const currentContent = getComposerPlainText(nextEditor);
@@ -589,13 +677,62 @@ export class GlobalVoiceSession {
     }
   }
 
+  /** Safe legacy-DOM fallback when the destination composer is not mounted yet. */
+  private deliverManualTranscript(text: string, rawText: string, target: VoiceTarget) {
+    const onTarget = () => target.kind === "thread" && target.threadId
+      ? window.location.pathname.includes(target.threadId) : !window.location.pathname.includes("/threads/");
+    const editor = onTarget() ? findComposerEditor() : null;
+    const offset = editor ? resolveComposerInsertOffset(getComposerPlainText(editor).length) : getRememberedComposerCaret();
+    if (editor) {
+      const before = getComposerPlainText(editor);
+      const planned = insertIntoDraftText(before, text, offset ?? before.length);
+      insertTranscriptAtCaret(editor, text, planned.offset);
+      this.persistDraftText(target, planned.text);
+      this.rememberManualTranscript(target, text, rawText, planned.text, planned.offset, planned.piece);
+      toast.success(words().voice.pasted);
+      return;
+    }
+    const key = getDraftStorageKeys(target)[0];
+    let before = "";
+    try {
+      const saved = key ? JSON.parse(window.localStorage.getItem(key) ?? "null") : null;
+      if (typeof saved?.text === "string") before = saved.text;
+    } catch {}
+    const planned = insertIntoDraftText(before, text, offset ?? before.length);
+    this.persistDraftInsert(target, text, offset);
+    this.rememberManualTranscript(target, text, rawText, planned.text, planned.offset, planned.piece);
+    if (!onTarget()) {
+      if (target.originPath) {
+        window.history.pushState(null, "", target.originPath);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } else if (this.navigateFn) this.navigateFn(target.threadId);
+      else window.location.href = target.threadId ? `/threads/${target.threadId}` : "/";
+    }
+    // The composer observer adopts only this exact persisted draft on mount;
+    // no delayed insertion into whichever editor happens to be visible.
+    toast.success(words().voice.pasted);
+  }
+
+  private rememberManualTranscript(target: VoiceTarget, text: string, rawText: string, draft: string, offset: number, piece: string) {
+    const scope = target.kind === "thread" ? `thread:${target.threadId}` : `new-thread:${target.projectId ?? ""}`;
+    const from = offset + (piece.startsWith(" ") ? 1 : 0);
+    manualImprovement.remember(scope, draft, from, from + text.trim().length, rawText);
+  }
+
   public cancelRecording() {
+    this.finalAbort?.abort();
+    this.finalAbort = null;
     this.cleanupAudio();
     this.recordedChunks = [];
     this.updateSnapshot({ state: "idle", target: null, error: null });
   }
 
+  public setBehavior(behavior: DictationBehavior) {
+    this.behavior = behavior;
+  }
+
   private cleanupAudio() {
+    this.silence = null;
     this.recordingGeneration += 1;
     const recorder = this.mediaRecorder;
     this.mediaRecorder = null;

@@ -2,6 +2,15 @@
 
 BB Voice Input adds speech transcription to BB chat. It can run Whisper or GigaAM on a recognition host, or send audio to Groq, OpenAI, or Google. Transcripts can be cleaned, matched against a vocabulary, and inserted into the original composer draft.
 
+Optional [contextual post-processing](docs/features/intent-postprocessing.md) adds
+on-demand **Improve / Undo** and configurable speaker-intent editing. Dictation
+also offers opt-in stop-on-silence and automatic sending bound to the original
+composer. These options are off by default. Automatic sending is skipped for
+manual or intent AI editing. Requires **BB 0.48.1+ / SDK 0.6.104+**.
+
+Live preview and switching to BB's native recorder are deferred. Recording
+continues to use the plugin recorder and existing hotkeys.
+
 ## Quick start
 
 ```sh
@@ -28,6 +37,8 @@ npm test
 npm run typecheck
 npm run build
 npm run test:host
+npm run test:ui
+npm run test:server
 ```
 
 ## Documentation
@@ -51,6 +62,15 @@ npm run test:host
 | ![Engine settings](screenshots/engines.png) | ![Vocabulary settings](screenshots/vocabulary.png) |
 | Cloud providers and API keys | Recordings and disk models |
 | ![Cloud settings](screenshots/cloud.png) | ![Data settings](screenshots/data.png) |
+
+## Contributor updates
+
+Thanks to [@aryadovoy](https://github.com/aryadovoy) for recording-session isolation
+in [#4](https://github.com/VKirill/bb-plugin-voice-input/pull/4) and contextual/manual
+editing in [#5](https://github.com/VKirill/bb-plugin-voice-input/pull/5), and to
+[@pierosavi](https://github.com/pierosavi) for the dictation, touch/hotkey and daemon
+improvements in [#3](https://github.com/VKirill/bb-plugin-voice-input/pull/3).
+The latter two proposals were integrated selectively with additional safety checks.
 
 ## Credits and license
 

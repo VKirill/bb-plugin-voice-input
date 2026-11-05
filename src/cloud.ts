@@ -3,7 +3,6 @@
 // Они не требуют ни Python, ни моделей на диске, но аудио уходит наружу —
 // в отличие от локальных движков. Выбор между скоростью установки и
 // приватностью остаётся за пользователем и виден прямо в настройках.
-import { Blob } from "node:buffer";
 
 export type CloudCredentials = {
   baseUrl: string;
@@ -61,7 +60,7 @@ export async function transcribeOpenAi(
 ): Promise<string> {
   const form = new FormData();
   form.set("model", credentials.model);
-  form.set("file", new Blob([request.audio], { type: request.mimeType }), request.filename);
+  form.set("file", new Blob([Uint8Array.from(request.audio)], { type: request.mimeType }), request.filename);
   if (request.language !== "auto") {
     form.set("language", request.language);
   }

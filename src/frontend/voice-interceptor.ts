@@ -5,6 +5,13 @@
 
 import { rememberComposerCaretFromDocument } from "./composer-insert.ts";
 import { globalVoiceSession, type VoiceTarget } from "./global-voice-session.ts";
+import {
+  DICTATION_BEHAVIOR_EVENT,
+  dictationBehaviorFromSettings,
+  publishDictationBehavior,
+  readDictationBehavior,
+  type DictationBehavior,
+} from "./dictation-behavior.ts";
 import { loadFrontendLanguage, observeFrontendLanguage, subscribeFrontendLanguage, words } from "./words.ts";
 import {
   HOTKEY_EVENT,
@@ -106,7 +113,7 @@ export function resolveCurrentVoiceTarget(): VoiceTarget {
     }
   } catch {}
 
-  const originPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+  const originPath = typeof window !== "undefined" ? window.location.pathname + window.location.search + window.location.hash : "/";
 
   let projectId: string | undefined;
   let threadId: string | undefined;
@@ -192,6 +199,13 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   const stopObservingLanguage = observeFrontendLanguage();
 
   let lastTriggerTime = 0;
+  let lastPointerDownAt = 0;
+  // A pointer click always follows its pointerdown, which already acted if it hit our button.
+  // If it started elsewhere, the click is a leftover from a tap on whatever was there before:
+  // on touch, bb sends on pointerup and swaps Send for the mic, and starting a recording puts
+  // the bar's buttons under the finger.
+  const isLeftoverClick = (event: Event, now = Date.now()) =>
+    event.type === "click" && (event as MouseEvent).detail > 0 && now - lastPointerDownAt < 1500;
   let barElement: HTMLElement | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let timerElement: HTMLElement | null = null;
@@ -238,13 +252,16 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   // Единый перехватчик событий клика/нажатия на микрофон
   const handleMicTrigger = (event: Event) => {
     const micButton = findVoiceButton(event.target);
+    const now = Date.now();
+    if (event.type === "pointerdown") lastPointerDownAt = now;
     if (!micButton) return;
 
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const now = Date.now();
+    if (isLeftoverClick(event, now)) return;
+
     if (now - lastTriggerTime < 350) return;
     lastTriggerTime = now;
 
@@ -270,6 +287,8 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   let hotkeyConfig: VoiceHotkeyConfig = readPublishedHotkeyConfig();
   let pttState: PttState = createPttState();
   let pttTimer: number | null = null;
+  // Пока клавишу держат, человек сам решает, когда закончить: тишина не в счёт.
+  globalVoiceSession.setAutoStopSuppressor(() => pttState.mode === "holding");
 
   const applyPttAction = (action: "start" | "stop" | "cancel" | "none") => {
     if (action === "cancel") {
@@ -330,6 +349,10 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     }
     event.preventDefault();
     event.stopPropagation();
+    // A latched recording may have ended without the key (silence, mic click): start fresh.
+    if (pttState.mode === "latched" && globalVoiceSession.getSnapshot().state !== "recording") {
+      pttState = createPttState();
+    }
     const next = pttKeyDown(pttState, Date.now());
     pttState = next.state;
     clearPttTimer();
@@ -373,9 +396,15 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
             : (raw as { settings?: Record<string, unknown> });
         if (payload?.settings) {
           hotkeyConfig = hotkeyFromSettings(payload.settings, hotkeyPlatform);
+          publishDictationBehavior(dictationBehaviorFromSettings(payload.settings));
         }
       })
       .catch(() => {});
+  };
+
+  const onBehaviorConfig = (event: Event) => {
+    const detail = (event as CustomEvent<DictationBehavior>).detail;
+    globalVoiceSession.setBehavior(detail && typeof detail === "object" ? detail : readDictationBehavior());
   };
 
   const onSelectionChange = () => {
@@ -401,6 +430,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
   window.addEventListener("keydown", onHotkeyDown, { capture: true, signal });
   window.addEventListener("keyup", onHotkeyUp, { capture: true, signal });
   window.addEventListener(HOTKEY_EVENT, onHotkeyConfig, { signal });
+  window.addEventListener(DICTATION_BEHAVIOR_EVENT, onBehaviorConfig, { signal });
   window.addEventListener("blur", onWindowBlur, { signal });
   document.addEventListener("selectionchange", onSelectionChange, { signal });
   loadHotkeyFromServer();
@@ -428,6 +458,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      if (isLeftoverClick(e)) return;
       if (isCanceling) return;
       isCanceling = true;
       setTimeout(() => {
@@ -497,6 +528,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      if (isLeftoverClick(e)) return;
       if (isConfirming) return;
       isConfirming = true;
       setTimeout(() => {
@@ -860,6 +892,7 @@ export function mountVoiceInputInterceptor({ signal }: { signal?: AbortSignal } 
     window.removeEventListener("keydown", onHotkeyDown, { capture: true });
     window.removeEventListener("keyup", onHotkeyUp, { capture: true });
     window.removeEventListener(HOTKEY_EVENT, onHotkeyConfig);
+    window.removeEventListener(DICTATION_BEHAVIOR_EVENT, onBehaviorConfig);
     window.removeEventListener("blur", onWindowBlur);
     clearPttTimer();
 

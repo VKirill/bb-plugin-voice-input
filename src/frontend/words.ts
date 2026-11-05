@@ -6,7 +6,7 @@ const listeners = new Set<() => void>();
 
 export function frontendLanguage() {
   return resolveUiLanguage(language === "auto" && typeof document !== "undefined"
-    ? document.documentElement.lang
+    ? (document.documentElement.getAttribute?.("data-pk-lang") || document.documentElement.lang)
     : language);
 }
 
@@ -25,7 +25,7 @@ export function observeFrontendLanguage() {
   const observer = new MutationObserver(() => {
     for (const listener of listeners) listener();
   });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang", "data-pk-lang"] });
   return () => observer.disconnect();
 }
 

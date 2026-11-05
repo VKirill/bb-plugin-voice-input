@@ -5,6 +5,7 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { UI_LANGUAGES } from "./i18n/index.ts";
+import { AI_PASS_MODES, AI_PASS_PROMPT_LIMIT } from "./ai-pass-prompts.ts";
 
 export const ENGINE_IDS = ["whisper", "gigaam", "openai", "google", "groq"] as const;
 export type EngineId = (typeof ENGINE_IDS)[number];
@@ -52,6 +53,9 @@ export const voiceConfigSchema = z
     aiPass: z
       .object({
         enabled: z.boolean(),
+        trigger: z.enum(["manual", "automatic"]).default("automatic"),
+        mode: z.enum(AI_PASS_MODES).default("terms"),
+        prompt: z.string().max(AI_PASS_PROMPT_LIMIT).default(""),
         baseUrl: z.string(),
         model: z.string(),
         apiKey: z.string(),
@@ -89,11 +93,7 @@ export const historyEntrySchema = z
   })
   .strict();
 
-/**
- * Методы, которые сервер вызывает у хоста. Сам голосовой контракт добавляется
- * в host-contract.ts: его вход `@get-bb/plugin-sdk/ai-services` доступен только
- * хосту, а серверная часть на path-установке грузится как обычный TypeScript.
- */
+/** Методы, которые сервер вызывает у хоста, в том числе для голосового сервиса BB. */
 export const managementContract = defineRpcContract({
   /** Кто эта машина. Нужно, чтобы отличить машину сервера BB от остальных. */
   identify: {
@@ -203,9 +203,14 @@ export const managementContract = defineRpcContract({
       .object({
         ok: z.boolean(),
         text: z.string(),
+        rawText: z.string().optional(),
         error: z.string().nullable(),
       })
       .strict(),
+  },
+  improveText: {
+    input: z.object({ text: z.string().min(1).max(50000), uiLanguage: z.enum(UI_LANGUAGES).optional() }).strict(),
+    output: z.object({ ok: z.boolean(), text: z.string(), error: z.string().nullable() }).strict(),
   },
   historyList: {
     input: z.object({ limit: z.number().int().min(1).max(200) }).strict(),
