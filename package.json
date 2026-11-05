@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-voice-input",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "type": "module",
   "engines": {
     "bb": ">=0.48.1",
