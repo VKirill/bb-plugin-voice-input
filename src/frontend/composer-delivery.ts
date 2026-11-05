@@ -6,6 +6,7 @@ export type ComposerDestination = {
   composer: PluginComposerApi;
   key: string;
   selection: string;
+  draft: string;
   route: string;
 };
 
@@ -18,7 +19,7 @@ export function captureComposerDestination(target: { kind: string; threadId?: st
     : composer.scope.kind === "new-thread");
   if (candidates.length !== 1) return null;
   const composer = candidates[0]!;
-  return { composer, key: composer.key, selection: JSON.stringify(composer.selection), route: currentComposerRoute() };
+  return { composer, key: composer.key, selection: JSON.stringify(composer.selection), draft: draftSignature(composer.draft), route: currentComposerRoute() };
 }
 
 /** Insert through the captured handle; submit only its unchanged, visible draft. */
@@ -54,7 +55,7 @@ export async function deliverToComposer(
     manualImprovement.remember(improvementScope(composer.scope), planned.text, from, from + text.trim().length, rawText);
     manualImprovement.adopt(composer);
   }
-  if (!options.autoSend) return true;
+  if (!options.autoSend || initialSignature !== destination.draft) return true;
   while (current() && options.canAutoSend?.() !== false && currentComposerRoute() === route && draftSignature(composer.draft) === expectedSignature) {
     if (!manualImprovement.getComposers().includes(composer)) return true;
     if (!composer.isSubmitting && !composer.isSubmittingBlocked) {

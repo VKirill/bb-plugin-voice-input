@@ -113,3 +113,20 @@ test("turning off auto-send while Send is blocked leaves the text in the draft",
   assert.equal(h.composer.draft.text, "Keep. hello");
   assert.deepEqual(h.state.sent, []);
 });
+
+test("editing the draft while recognition is pending leaves the combined text unsent", async (t) => {
+  const h = setup(t);
+  h.edit("My new draft");
+  await deliverToComposer(h.destination, "hello", "hello", options);
+  assert.equal(h.composer.draft.text, "My new draft hello");
+  assert.deepEqual(h.state.sent, []);
+});
+
+test("adding an attachment while recognition is pending prevents auto-send", async (t) => {
+  const h = setup(t);
+  h.composer.replace({ ...h.composer.draft, attachments: [{ type: "localFile", path: "/new.txt", name: "new.txt" }] });
+  await deliverToComposer(h.destination, "hello", "hello", options);
+  assert.equal(h.composer.draft.text, "Keep. hello");
+  assert.equal(h.composer.draft.attachments.length, 1);
+  assert.deepEqual(h.state.sent, []);
+});
