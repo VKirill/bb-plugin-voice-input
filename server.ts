@@ -151,8 +151,13 @@ export const rpcContract = defineRpcContract({
     output: z.object({
       ok: z.boolean(),
       text: z.string(),
+      rawText: z.string().optional(),
       error: z.string().nullable(),
     }),
+  },
+  improveText: {
+    input: managementContract.improveText.input,
+    output: managementContract.improveText.output,
   },
 });
 
@@ -226,6 +231,9 @@ export default async function plugin(bb: BbPluginApi) {
       },
       aiPass: {
         enabled: values.aiPassEnabled,
+        trigger: values.aiPassTrigger,
+        mode: values.aiPassMode,
+        prompt: values.aiPassPrompt,
         baseUrl: values.aiPassBaseUrl,
         model: values.aiPassModel,
         apiKey: "",
@@ -516,6 +524,14 @@ export default async function plugin(bb: BbPluginApi) {
         return { ok: false, text: "", error: describe(error) };
       }
     },
+    improveText: async (input) => {
+      try {
+        const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
+        return await host.call("improveText", input, { hostId, timeoutMs: 40_000 });
+      } catch (error) {
+        return { ok: false, text: "", error: describe(error) };
+      }
+    },
   });
 
   async function transcribeFromAudio(input: {
@@ -531,9 +547,9 @@ export default async function plugin(bb: BbPluginApi) {
       {
         audioBase64: input.audioBase64,
         mimeType: input.mimeType,
-        filename: input.filename,
-        prompt: input.prompt,
-        uiLanguage: input.uiLanguage,
+        ...(input.filename === undefined ? {} : { filename: input.filename }),
+        ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
+        ...(input.uiLanguage === undefined ? {} : { uiLanguage: input.uiLanguage }),
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
       },
       { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },

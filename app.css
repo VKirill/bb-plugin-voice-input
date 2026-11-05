@@ -1,0 +1,18 @@
+.vi-improvement {
+  min-width: 0;
+  border: 1px solid var(--pk-hairline, var(--border));
+  border-radius: 12px;
+  background: var(--pk-card, var(--card));
+  box-shadow: var(--pk-card-drop, none);
+  color: var(--foreground);
+}
+.vi-prompt {
+  border: 1px solid var(--pk-outline, var(--input));
+  border-radius: 8px;
+  background: var(--pk-card, var(--background));
+  color: var(--foreground);
+}
+.vi-accent {
+  background: var(--pk-accent-gradient, var(--primary));
+  color: var(--primary-foreground);
+}

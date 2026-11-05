@@ -55,7 +55,7 @@ const DEFAULT_CONFIG: VoiceConfig = {
     groqApiKey: "",
     groqKeyEnv: "",
   },
-  aiPass: { enabled: false, baseUrl: "https://api.openai.com/v1", model: "", apiKey: "", keyEnv: "" },
+  aiPass: { enabled: false, trigger: "automatic", mode: "terms", prompt: "", baseUrl: "https://api.openai.com/v1", model: "", apiKey: "", keyEnv: "" },
   saveRecordings: true,
   keepDays: 14,
 };
@@ -197,7 +197,12 @@ async function postprocess(
   rawText: string,
   config: VoiceConfig,
   log: (message: string) => void,
+  requireAiPass = false,
 ): Promise<string> {
+  const aiPassKey = resolveAiPassKey(config).key;
+  if (requireAiPass && (!config.aiPass.enabled || !config.aiPass.model.trim() || !aiPassKey.trim())) {
+    throw new Error(dictionary(config.uiLanguage).improvement.configure);
+  }
   const entries = parseVocabulary(config.vocabulary);
   let text = rawText;
 
@@ -211,19 +216,24 @@ async function postprocess(
     language: config.language,
   });
 
-  const aiPassKey = resolveAiPassKey(config).key;
-  if (config.aiPass.enabled && config.aiPass.model && aiPassKey) {
+  if (config.aiPass.enabled && (config.aiPass.trigger === "automatic" || requireAiPass) && config.aiPass.model && aiPassKey) {
     try {
-      const corrected = await runAiPass(text, {
+      const intent = config.aiPass.mode === "intent";
+      // Для контекстной редактуры сохраняем исходные слова, до эвристических замен.
+      const corrected = await runAiPass(intent ? rawText : text, {
         baseUrl: config.aiPass.baseUrl,
         model: config.aiPass.model,
         apiKey: aiPassKey,
         vocabulary: entries,
         timeoutMs: AI_PASS_TIMEOUT_MS,
+        mode: config.aiPass.mode,
+        prompt: config.aiPass.prompt,
+        uiLanguage: config.uiLanguage,
       });
-      // Модель иногда переписывает обычные слова вопреки промпту.
-      text = guardAiPass(text, corrected, entries);
+      // Пословная защита нужна только строгому режиму: иначе она отменяет редактуру.
+      text = intent ? corrected : guardAiPass(text, corrected, entries);
     } catch (error) {
+      if (requireAiPass) throw error;
       // Текст после правил уже пригоден — сбой прохода не должен его отменять.
       log(`ИИ-проход пропущен: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -399,7 +409,7 @@ async function executeAudioTranscription(
     uiLanguage?: string;
   },
   tempDir: string,
-): Promise<{ ok: true; model: string; text: string } | { ok: false; code: "timeout" | "request_failed"; message: string }> {
+): Promise<{ ok: true; model: string; text: string; rawText: string } | { ok: false; code: "timeout" | "request_failed"; message: string }> {
   const config = await readConfigWithSecrets(paths);
   if (input.uiLanguage) config.uiLanguage = input.uiLanguage;
   const audio = Buffer.from(input.audioBase64, "base64");
@@ -423,7 +433,7 @@ async function executeAudioTranscription(
       prompt: input.prompt ?? null,
       timeoutMs: input.timeoutMs ?? 600_000,
     });
-    return { ok: true as const, model: outcome.engine, text: outcome.text };
+    return { ok: true as const, model: outcome.engine, text: outcome.text, rawText: outcome.rawText };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -549,26 +559,23 @@ export default experimental_defineHostEntry({
       return { entries };
     },
 
-    // Контракт SDK описывает оба вида сервиса, но плагин заявлен только как
-    // голосовой: текстовую генерацию он честно отклоняет.
-    "ai.inference.complete": async () => ({
-      ok: false as const,
-      code: "request_failed" as const,
-      message: "Voice Input supports transcription only.",
-    }),
-
-    "ai.voice.transcribe": async (input, context) => {
-      const paths = hostPaths(context.experimental_paths.dataDir);
-      return await executeAudioTranscription(paths, input, context.experimental_paths.tempDir);
-    },
-
     transcribeDirect: async (input, context) => {
       const paths = hostPaths(context.experimental_paths.dataDir);
       const res = await executeAudioTranscription(paths, input, context.experimental_paths.tempDir);
       if (res.ok) {
-        return { ok: true as const, text: res.text, error: null };
+        return { ok: true as const, text: res.text, rawText: res.rawText, error: null };
       }
       return { ok: false as const, text: "", error: res.message };
+    },
+
+    improveText: async ({ text, uiLanguage }, context) => {
+      try {
+        const config = await readConfigWithSecrets(hostPaths(context.experimental_paths.dataDir));
+        if (uiLanguage) config.uiLanguage = uiLanguage;
+        return { ok: true, text: await postprocess(text, config, () => {}, true), error: null };
+      } catch (error) {
+        return { ok: false, text: "", error: error instanceof Error ? error.message : String(error) };
+      }
     },
 
     downloadModel: async ({ engine, uiLanguage }, context) => {

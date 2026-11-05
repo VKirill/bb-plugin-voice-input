@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { ENGINE_IDS, LANGUAGES } from "./contract.ts";
 import { UI_LANGUAGES } from "./i18n/index.ts";
+import { AI_PASS_MODES, AI_PASS_PROMPT_LIMIT } from "./ai-pass-prompts.ts";
 
 export const WHISPER_MODELS: Record<string, string> = {
   "large-v3 4-bit (быстрее, рекомендуется)": "mlx-community/whisper-large-v3-mlx-4bit",
@@ -47,6 +48,9 @@ export const storedSettingsSchema = z
     groqKeyEnv: z.string(),
     groqKeyCatalog: z.string(),
     aiPassEnabled: z.boolean(),
+    aiPassTrigger: z.enum(["manual", "automatic"]),
+    aiPassMode: z.enum(AI_PASS_MODES),
+    aiPassPrompt: z.string().max(AI_PASS_PROMPT_LIMIT),
     aiPassBaseUrl: z.string(),
     aiPassModel: z.string(),
     aiPassKeyEnv: z.string(),
@@ -65,6 +69,8 @@ export const storedSettingsSchema = z
     hotkeyWinCtrl: z.boolean(),
     hotkeyWinShift: z.boolean(),
     hotkeyWinMeta: z.boolean(),
+    autoSend: z.boolean(),
+    silenceStopSeconds: z.number().min(0).max(10),
   })
   .strict();
 
@@ -94,6 +100,9 @@ export const DEFAULT_SETTINGS: StoredSettings = {
   groqKeyEnv: "",
   groqKeyCatalog: "",
   aiPassEnabled: false,
+  aiPassTrigger: "automatic",
+  aiPassMode: "terms",
+  aiPassPrompt: "",
   aiPassBaseUrl: "https://api.openai.com/v1",
   aiPassModel: "",
   aiPassKeyEnv: "",
@@ -112,6 +121,8 @@ export const DEFAULT_SETTINGS: StoredSettings = {
     hotkeyWinCtrl: false,
     hotkeyWinShift: false,
     hotkeyWinMeta: false,
+    autoSend: false,
+    silenceStopSeconds: 0,
   };
 
 /**

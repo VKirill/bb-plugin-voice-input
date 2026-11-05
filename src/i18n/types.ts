@@ -56,6 +56,12 @@ export type Dictionary = {
     hotkeyPresetWinAltRight: string;
     hotkeyPresetWinAltLeft: string;
     hotkeyPresetWinCapsLock: string;
+    autoSend: string;
+    autoSendHint: string;
+    silenceStop: string;
+    silenceStopHint: string;
+    silenceStopOff: string;
+    silenceStopSeconds: (seconds: number) => string;
     hotkeyPresetWinF8: string;
   };
 
@@ -69,6 +75,17 @@ export type Dictionary = {
     promptHint: string;
     aiPass: string;
     aiPassHint: string;
+    aiTrigger: string;
+    aiTriggerHint: string;
+    aiTriggerManual: string;
+    aiTriggerAutomatic: string;
+    aiMode: string;
+    aiModeHint: string;
+    aiModeTerms: string;
+    aiModeIntent: string;
+    aiPrompt: string;
+    aiPromptHint: string;
+    aiPromptReset: string;
     provider: string;
     providerCustom: string;
     model: string;
@@ -94,6 +111,12 @@ export type Dictionary = {
     keyFromCatalog: (name: string) => string;
     replace: string;
     save: string;
+  };
+
+  improvement: {
+    command: string; configure: string; empty: string; incomplete: string; httpError: (status: number) => string;
+    improve: string; busy: string; hint: string; changed: string; apply: string;
+    dismiss: string; undo: string; done: string; failed: string; mentions: string;
   };
 
   data: {
@@ -128,6 +151,7 @@ export type Dictionary = {
 
   /** Тосты и подписи записи в окне приложения (frontend). */
   voice: {
+    destinationChanged: string;
     micError: string;
     micFailed: string;
     micDenied: string;

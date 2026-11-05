@@ -1,3 +1,4 @@
+import "./app.css";
 // Страница плагина: настройки разложены по вкладкам, чтобы каждая помещалась
 // на экран целиком. Здесь же видно состояние движков на машине распознавания
 // и ход загрузки модели — молчаливое ожидание в минуту это худшее, что может
@@ -8,11 +9,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Icon } from "@/components/ui/icon";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import type { rpcContract } from "./server";
 import { AI_PASS_PROVIDERS, TRANSCRIBE_PROVIDERS, type ProviderInfo } from "./src/providers";
+import { AI_PASS_PROMPT_LIMIT, DEFAULT_INTENT_PROMPT } from "./src/ai-pass-prompts";
 import { dictionary, LANGUAGE_NAMES, UI_LANGUAGES, type Dictionary } from "./src/i18n/index";
-import { mountVoiceInputInterceptor } from "./src/frontend/voice-interceptor";
+import { dictationBehaviorFromSettings, publishDictationBehavior } from "./src/frontend/dictation-behavior";
+import { publishDictationSettings } from "./src/frontend/dictation-settings";
+import { ImprovementAction, ImprovementBanner, improveDictation } from "./src/frontend/improvement-actions";
+import { mountRecorderLifecycle } from "./src/frontend/recorder-lifecycle";
 import { frontendLanguage, setFrontendLanguage, subscribeFrontendLanguage, words } from "./src/frontend/words";
 import {
   HOTKEY_PRESETS,
@@ -454,6 +460,7 @@ function VoiceInputSettings() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("general");
   const [busy, setBusy] = useState<string | null>(null);
   const [vocabularyDraft, setVocabularyDraft] = useState<string | null>(null);
+  const [aiPromptDraft, setAiPromptDraft] = useState<string | null>(null);
   const [diskModels, setDiskModels] = useState<DiskModel[]>([]);
   const [catalog, setCatalog] = useState<Catalog>(null);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -477,6 +484,7 @@ function VoiceInputSettings() {
       const next = (await rpc.call("state", { uiLanguage: frontendLanguage() })) as PageState;
       if (pendingSaves.current === 0 && revision === settingsRevision.current && request === refreshRequest.current) {
         setState(next);
+        publishDictationSettings(next.settings);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -490,6 +498,7 @@ function VoiceInputSettings() {
   useEffect(() => {
     if (state?.settings) {
       publishHotkeyConfig(hotkeyFromSettings(state.settings));
+      publishDictationBehavior(dictationBehaviorFromSettings(state.settings));
     }
   }, [state?.settings]);
 
@@ -759,6 +768,25 @@ function VoiceInputSettings() {
             hint={t.dictation.hotkeyWindowsHint}
           />
           <Toggle
+            label={t.dictation.autoSend}
+            hint={t.dictation.autoSendHint}
+            checked={values.autoSend === true}
+            onChange={(next) => void save({ autoSend: next })}
+          />
+          <Row label={t.dictation.silenceStop} hint={t.dictation.silenceStopHint}>
+            <Select
+              value={String(values.silenceStopSeconds ?? 0)}
+              options={[
+                { value: "0", label: t.dictation.silenceStopOff },
+                ...["1", "1.5", "2", "2.5", "3", "5"].map((seconds) => ({
+                  value: seconds,
+                  label: t.dictation.silenceStopSeconds(Number(seconds)),
+                })),
+              ]}
+              onChange={(next) => void save({ silenceStopSeconds: Number(next) })}
+            />
+          </Row>
+          <Toggle
             label={t.dictation.fillers}
             hint={t.dictation.fillersHint}
             checked={values.cleanupFillers === true}
@@ -810,6 +838,49 @@ function VoiceInputSettings() {
           />
           {values.aiPassEnabled === true && (
             <div className="flex flex-col gap-2 rounded-lg border p-3">
+              <Row label={t.vocabulary.aiTrigger} hint={t.vocabulary.aiTriggerHint}>
+                <Select
+                  value={String(values.aiPassTrigger ?? "automatic")}
+                  options={[
+                    { value: "automatic", label: t.vocabulary.aiTriggerAutomatic },
+                    { value: "manual", label: t.vocabulary.aiTriggerManual },
+                  ]}
+                  onChange={(next) => void save({ aiPassTrigger: next })}
+                />
+              </Row>
+              <Row label={t.vocabulary.aiMode} hint={t.vocabulary.aiModeHint}>
+                <Select
+                  value={String(values.aiPassMode ?? "terms")}
+                  options={[
+                    { value: "terms", label: t.vocabulary.aiModeTerms },
+                    { value: "intent", label: t.vocabulary.aiModeIntent },
+                  ]}
+                  onChange={(next) => void save({ aiPassMode: next })}
+                />
+              </Row>
+              {values.aiPassMode === "intent" && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="voice-input-ai-prompt" className="text-sm">{t.vocabulary.aiPrompt}</label>
+                  <Textarea
+                    id="voice-input-ai-prompt"
+                    className="vi-prompt min-h-48 w-full p-2 text-sm"
+                    maxLength={AI_PASS_PROMPT_LIMIT}
+                    value={aiPromptDraft ?? (String(values.aiPassPrompt ?? "") || DEFAULT_INTENT_PROMPT)}
+                    onChange={(event) => setAiPromptDraft(event.target.value)}
+                    onBlur={() => {
+                      if (aiPromptDraft !== null) void save({ aiPassPrompt: aiPromptDraft.trim() });
+                      setAiPromptDraft(null);
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground">{t.vocabulary.aiPromptHint}</span>
+                  <div>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setAiPromptDraft(null);
+                      void save({ aiPassPrompt: "" });
+                    }}>{t.vocabulary.aiPromptReset}</Button>
+                  </div>
+                </div>
+              )}
               {(() => {
                 const current =
                   AI_PASS_PROVIDERS.find(
@@ -1023,13 +1094,23 @@ function VoiceInputSettings() {
 }
 
 export default definePluginApp((app) => {
+  app.composer.customize({
+    id: "dictation-improvement",
+    scopes: ["thread", "new-thread"],
+    actions: [{ id: "improve-dictation", component: ImprovementAction }],
+    banners: [{ id: "improvement-result", chrome: "bare", component: ImprovementBanner }],
+  });
+  app.composer.experimental_registerCommand({
+    id: "improve-dictation", title: words().improvement.command,
+    defaultShortcut: { key: "u", mod: true, shift: true }, run: ({ composer }) => improveDictation(composer),
+  });
   app.slots.settingsSection({
     id: "voice-input",
     component: VoiceInputSettings,
   });
 
   app.contentScripts.register({
-    id: "voice-input-interceptor",
-    mount: mountVoiceInputInterceptor,
+    id: "voice-input-lifecycle",
+    mount: mountRecorderLifecycle,
   });
 });

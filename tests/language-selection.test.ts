@@ -53,3 +53,17 @@ test("failed settings request leaves the selected language intact", async () => 
     setFrontendLanguage("auto");
   }
 });
+
+test("auto language respects the Pokecut russifier override", () => {
+  const original = globalThis.document;
+  try {
+    Object.assign(globalThis, { document: { documentElement: { lang: "en", getAttribute: (name: string) => name === "data-pk-lang" ? "ru" : null } } });
+    setFrontendLanguage("auto");
+    assert.equal(words(), dictionary("ru"));
+    setFrontendLanguage("en");
+    assert.equal(words(), dictionary("en"));
+  } finally {
+    Object.assign(globalThis, { document: original });
+    setFrontendLanguage("auto");
+  }
+});
