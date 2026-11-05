@@ -1,4 +1,6 @@
 import React, { useEffect, useSyncExternalStore } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MagicWand01Icon } from "@hugeicons/core-free-icons";
 import { useComposer, useRealtime, type PluginComposerApi } from "@get-bb/plugin-sdk/app";
 import { Button } from "../../components/ui/button";
 import { manualImprovement } from "./manual-improvement.ts";
@@ -50,7 +52,8 @@ export function ImprovementAction() {
       <Button type="button" variant="ghost" size="sm" aria-label={t.improve}
         disabled={!entry || entry.status === "busy" || composer.isSubmittingBlocked}
         onClick={() => void improveDictation(composer)}>
-        {entry?.status === "busy" ? t.busy : t.improve}
+        <HugeiconsIcon icon={MagicWand01Icon} size={16} aria-hidden="true" />
+        <span>{entry?.status === "busy" ? t.busy : t.improve}</span>
       </Button>
     </span>
   );
