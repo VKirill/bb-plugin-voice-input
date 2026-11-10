@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "status": "accepted",
+  "lanePilotRunId": "lprun_4c7ba30c82064d408452ba865c6fd345",
+  "lanePilotTaskId": "vocab-only-hint",
+  "attemptId": "lpattempt_a2e4eeb885824edca9c22991e4da00fd",
+  "pmThreadId": "thr_qxaf8d2fa4",
+  "writerThreadId": "thr_dbtsdt9cp4",
+  "ownsPaths": [
+    "host.ts",
+    "tests/host-prompt.integration.mjs"
+  ],
+  "readFirst": [
+    {
+      "path": "host.ts",
+      "windows": []
+    },
+    {
+      "path": "src/vocabulary.ts",
+      "windows": []
+    },
+    {
+      "path": "tests/host-postprocess.integration.mjs",
+      "windows": []
+    }
+  ],
+  "output": "All verification commands pass:\n\n- `npm run build && node /tmp/vi-hint/check.mjs` → prints `ok`\n- `node --test tests/host-prompt.integration.mjs tests/host-postprocess.integration.mjs` → 11/11 pass\n- `npx tsc --noEmit` → exit 0\n\nChanged paths:\n- `host.ts` — `runTranscription` now builds `hint` solely from `buildRecognitionPrompt(entries, PROMPT_BUDGET_CHARS)` when `vocabularyPrompt` is on, else `null`; the `?? args.prompt` / `: args.prompt` fallbacks are gone, so composer text and BB's hint never reach the speech model. The RPC `prompt` field, `args.prompt`, and the silence/hallucination guard are unchanged.\n- `tests/host-prompt.integration.mjs` — new harness test (same style as `host-postprocess.integration.mjs`, temp dir under `/tmp`) asserting all four vocabulary/toggle combinations against the captured multipart `prompt` field.\n\n```plan-fact\n[\n  {\"item\":1,\"status\":\"done\",\"evidence\":[\"host.ts:287-290\",\"tests/host-prompt.integration.mjs:33-61\",\"cmd:sh -c 'npm run build >/dev/null && node /tmp/vi-hint/check.mjs'\"]},\n  {\"item\":2,\"status\":\"done\",\"evidence\":[\"host.ts:287-290\",\"tests/host-prompt.integration.mjs:46-58\",\"cmd:sh -c 'npm run build >/dev/null && node --test tests/host-prompt.integration.mjs tests/host-postprocess.integration.mjs'\"]},\n  {\"item\":3,\"status\":\"done\",\"evidence\":[\"cmd:npx tsc --noEmit\",\"host.ts:287-290\"]}\n]\n```\n\nAPPROACH: Removed the `args.prompt` fallback in `runTranscription` so `hint` is `buildRecognitionPrompt(entries, PROMPT_BUDGET_CHARS)` when the toggle is on and `null` otherwise — one-line-shaped change, everything downstream (cloud request, daemon call, hallucination guard) already accepts `string | null`. Added `tests/host-prompt.integration.mjs` using `experimental_createHostEntryHarness` on `dist/host.js` with a fetch mock capturing `init.body.has(\"prompt\")`/`get(\"prompt\")`, covering empty vocabulary × toggle on/off and \"DeepSeek, MLX\" × toggle on/off.\n\nLESSON: The same `runTranscription` hint feeds cloud engines, the local daemon, and the echo guard — fixing it at the single `hint` assignment covers every engine without touching per-engine code.",
+  "verification": [
+    {
+      "command": "sh -c 'npm run build >/dev/null && node /tmp/vi-hint/check.mjs'",
+      "exitCode": 0,
+      "stdout": "(node:38410) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.\r\n(Use `node --trace-deprecation ...` to show where the warning was created)\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m New \u001b[31mmajor\u001b[39m version of npm available! \u001b[31m11.16.0\u001b[39m -> \u001b[34m12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m Changelog: \u001b[34mhttps://github.com/npm/cli/releases/tag/v12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m To update run: \u001b[4mnpm install -g npm@12.2.2\u001b[24m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\nok\r\n",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "6505032716bbe9de3a22c46d1a1dfa1fbf2c0e73dbdac1506baad999c90e0580",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 300,
+      "revision": {
+        "head": "c28b509c9f44a986e4c4c4cd63b6fa8b0212147f",
+        "dirty": 2
+      }
+    },
+    {
+      "command": "sh -c 'npm run build >/dev/null && node --test tests/host-prompt.integration.mjs tests/host-postprocess.integration.mjs'",
+      "exitCode": 0,
+      "stdout": "(node:38349) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.\r\n(Use `node --trace-deprecation ...` to show where the warning was created)\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m New \u001b[31mmajor\u001b[39m version of npm available! \u001b[31m11.16.0\u001b[39m -> \u001b[34m12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m Changelog: \u001b[34mhttps://github.com/npm/cli/releases/tag/v12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m To update run: \u001b[4mnpm install -g npm@12.2.2\u001b[24m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n✔ intent pipeline edits without vocabulary and sends the raw transcript before cleanup (36.697917ms)\r\n✔ intent editing sees original words before heuristic vocabulary replacement (4.1815ms)\r\n✔ terms-only mode still applies the word guard and skips editing with an empty vocabulary (6.342708ms)\r\n✔ failed or truncated automatic editing keeps the full ordinary-cleanup transcript (2.919041ms)\r\n✔ disabled AI editing makes no text-model request (1.781792ms)\r\n✔ manual mode returns STT with ordinary cleanup and only edits on explicit request (2.3245ms)\r\n✔ explicit terms editing uses the same cleanup and vocabulary guard as automatic editing (1.475042ms)\r\n✔ manual editing reports failures rather than fake successful rewrites (1.377166ms)\r\n✔ explicit editing requires AI to be enabled and a model and key to be configured (3.123583ms)\r\n✔ legacy host settings without AI fields retain automatic terms-only processing (1.890458ms)\r\n✔ composer text and BB hint never reach the API; only the vocabulary does (44.985792ms)\r\nℹ tests 11\r\nℹ suites 0\r\nℹ pass 11\r\nℹ fail 0\r\nℹ cancelled 0\r\nℹ skipped 0\r\nℹ todo 0\r\nℹ duration_ms 228.872375\r\n",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "507590e24ded3631cbcc5fd8413d12b3f7ec2f8c7dd2f8d6ff9da0c646d6b86b",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 300,
+      "revision": {
+        "head": "c28b509c9f44a986e4c4c4cd63b6fa8b0212147f",
+        "dirty": 2
+      }
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0,
+      "stdout": "\\\u001b[1G\u001b[0K\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m New \u001b[31mmajor\u001b[39m version of npm available! \u001b[31m11.16.0\u001b[39m -> \u001b[34m12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m Changelog: \u001b[34mhttps://github.com/npm/cli/releases/tag/v12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m To update run: \u001b[4mnpm install -g npm@12.2.2\u001b[24m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\\\u001b[1G\u001b[0K",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "58e2987755863699574eb30a567f9030c3fd26dc7e8b6100abb622b79345c387",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 300,
+      "revision": {
+        "head": "c28b509c9f44a986e4c4c4cd63b6fa8b0212147f",
+        "dirty": 2
+      }
+    }
+  ],
+  "runV2": {
+    "schemaVersion": 1,
+    "pools": {
+      "provider": 15,
+      "verification": 2
+    },
+    "score": 2,
+    "risk": "low",
+    "sourceRisk": "low",
+    "scoreAdapter": "task-risk-v1"
+  },
+  "reasoning": [
+    {
+      "planSha256": "2a69fdc438631f888a337af520d101bf3ef9c82b7c9a5b3003db83666b0ea928",
+      "sentPlanSha256": null,
+      "sourceLength": 1666,
+      "sentLength": null,
+      "jevStatus": "disabled",
+      "jevDecision": null,
+      "requestedReasoningLevel": "high",
+      "effectiveReasoningLevel": "high",
+      "fallbackReason": "jev_disabled;jev_disabled_by_project_setting",
+      "retryEffort": {
+        "enabled": false,
+        "retryIndex": 0,
+        "before": "high",
+        "after": "high",
+        "changed": false
+      },
+      "providerId": "devin",
+      "model": "swe-2-flash-medium",
+      "serviceTier": "fast",
+      "requestedServiceTier": "fast",
+      "runId": "lprun_4c7ba30c82064d408452ba865c6fd345",
+      "attemptId": "lpattempt_a2e4eeb885824edca9c22991e4da00fd",
+      "threadId": "thr_dbtsdt9cp4",
+      "effortMode": "manual",
+      "selectionSource": {
+        "providerId": "devin",
+        "model": "swe-2-flash-medium",
+        "reasoningLevel": "high",
+        "serviceTier": "fast",
+        "reasoningLevelSource": "explicit"
+      },
+      "dispatchContext": {
+        "memoryText": "",
+        "memoryPicked": [],
+        "rulesText": "- In a folder without git (live-folder mode), never put a task's expected_outputs or owns_paths under .bb/ (chat folders): the live snapshot skips .bb, so a file written there is never counted as produced and the task blocks as missing expected_outputs. Put task deliverables in a project folder such as docs/ or reports/.\n- Правя тестовый файл из owns_paths, меняй только ожидаемые значения внутри существующих строгих assert (deepEqual/equal) и добавляй новые проверки рядом — не удаляй строки assert и не ослабляй строгую проверку до assert.ok/includes/truthiness; перед ответом перечитай свой diff по тестам и верни всё, что стало слабее: test_fit помечает это как сломанную проверку, и попытки сгорают до лимита.",
+        "rulesPicked": {
+          "total": 33,
+          "picked": [
+            "rule_df3e34f2aef5a993",
+            "rule_af70160574711f7e"
+          ]
+        },
+        "executionPacket": "Read these before editing; they are the context for this task:\n- src/cloud.ts L1-L244 (sha256 477faa9f)\n- host.ts L1-L648 (sha256 3022202c)",
+        "executionPacketSha256": "a2f862246580ce5e1f1ee4830c059108f41d289e503b673224dbb067bbfb9d52",
+        "pmReadContext": "",
+        "agent": "Lane Pilot writer",
+        "promptChars": 7911,
+        "helperMode": "roles",
+        "helperRequired": false,
+        "skillPick": {
+          "enabled": true,
+          "skills": [
+            "voice-input"
+          ],
+          "picked": [],
+          "craft": [],
+          "projectFolder": [
+            "voice-input"
+          ],
+          "hints": [],
+          "sources": {
+            "voice-input": "/Users/vechkasov/.bb/plugins/cache/git/github.com/VKirill/bb-plugin-voice-input/f21294f662f222a6ee497559677317b1045c5930/skills/voice-input"
+          },
+          "reason": null,
+          "materialized": []
+        },
+        "writerKey": "devin/swe-2-flash-medium",
+        "harness": {
+          "id": "hrn_81941aabda432066",
+          "arm": null,
+          "alwaysOnChars": 0,
+          "skills": [],
+          "checks": [],
+          "materialize": null
+        }
+      }
+    }
+  ],
+  "emergencyFallback": null,
+  "turns": 1
+}

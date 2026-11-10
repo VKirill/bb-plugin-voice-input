@@ -286,8 +286,8 @@ async function runTranscription(
 
   const entries = parseVocabulary(config.vocabulary);
   const hint = config.vocabularyPrompt
-    ? (buildRecognitionPrompt(entries, PROMPT_BUDGET_CHARS) ?? args.prompt)
-    : args.prompt;
+    ? buildRecognitionPrompt(entries, PROMPT_BUDGET_CHARS)
+    : null;
 
   if (
     config.engine === "openai" ||
