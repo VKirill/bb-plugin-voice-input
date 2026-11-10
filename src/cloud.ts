@@ -53,6 +53,12 @@ async function withTimeout<T>(
   }
 }
 
+/**
+ * OpenAI отклоняет подсказку длиннее этого лимита (HTTP 400). Как и
+ * buildRecognitionPrompt, обрезаем с начала: важные термины — в конце.
+ */
+export const OPENAI_PROMPT_LIMIT = 896;
+
 /** OpenAI-совместимый multipart: whisper-1, gpt-4o-transcribe и их аналоги. */
 export async function transcribeOpenAi(
   credentials: CloudCredentials,
@@ -65,7 +71,7 @@ export async function transcribeOpenAi(
     form.set("language", request.language);
   }
   if (request.prompt) {
-    form.set("prompt", request.prompt);
+    form.set("prompt", request.prompt.slice(-OPENAI_PROMPT_LIMIT));
   }
 
   const response = await withTimeout(request.timeoutMs, (signal) =>
