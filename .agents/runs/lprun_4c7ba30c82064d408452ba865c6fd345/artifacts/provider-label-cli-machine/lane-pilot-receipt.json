@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "status": "accepted",
+  "lanePilotRunId": "lprun_4c7ba30c82064d408452ba865c6fd345",
+  "lanePilotTaskId": "provider-label-cli-machine",
+  "attemptId": "lpattempt_3d23674b0d0a4e86a5972af5b0661ec3",
+  "pmThreadId": "thr_qxaf8d2fa4",
+  "writerThreadId": "thr_dbtsdt9cp4",
+  "ownsPaths": [
+    "src/cloud.ts",
+    "host.ts",
+    "server.ts",
+    "tests/cloud-error-label.test.ts"
+  ],
+  "readFirst": [
+    {
+      "path": "src/cloud.ts",
+      "windows": []
+    },
+    {
+      "path": "host.ts",
+      "windows": []
+    },
+    {
+      "path": "server.ts",
+      "windows": []
+    }
+  ],
+  "output": "Done. All three verification commands pass:\n\n- `node /tmp/vi-label/check.mjs` → `ok`\n- `node --test tests/cloud-error-label.test.ts tests/cloud-prompt.test.ts` → 4/4 pass\n- `npx tsc --noEmit` → exit 0\n\nChanged paths:\n- `src/cloud.ts` — `CloudCredentials` gains optional `label`; the HTTP error now reads `${credentials.label ?? \"OpenAI\"} ответил HTTP …`\n- `host.ts` — `transcribeOpenAi` credentials get `label: groq ? \"Groq\" : \"OpenAI\"`\n- `server.ts` — CLI `run()` resolves the host with `flags.machine ?? ((await readSettings()).machine || undefined)`, so `--machine` still wins but the default is now the configured recognition machine\n- `tests/cloud-error-label.test.ts` — new node:test covering Groq/OpenAI labels on a 400 reply\n\n```plan-fact\n[\n  {\"item\":1,\"status\":\"done\",\"evidence\":[\"src/cloud.ts:11-12\",\"src/cloud.ts:90\",\"host.ts:325\",\"tests/cloud-error-label.test.ts\",\"cmd:node /tmp/vi-label/check.mjs\"]},\n  {\"item\":2,\"status\":\"done\",\"evidence\":[\"server.ts:633\"]},\n  {\"item\":3,\"status\":\"done\",\"evidence\":[\"cmd:npx tsc --noEmit\",\"src/cloud.ts:11-12\",\"host.ts:325\",\"server.ts:633\"]}\n]\n```\n\nAPPROACH: Added an optional `label` to `CloudCredentials` defaulting to \"OpenAI\" in the error template, passed `label: groq ? \"Groq\" : \"OpenAI\"` from `runTranscription`, and changed the single `resolveHostId` call in the CLI `run()` to fall back to `(await readSettings()).machine || undefined` when `--machine` is absent. New test stubs fetch with a 400 `{error:{message:\"bad prompt\"}}` and asserts both provider prefixes.\n\nLESSON: `transcribeOpenAi` serves two providers behind one OpenAI-compatible API — a credentials `label` keeps error text honest without splitting the function; and every CLI command shares the one `resolveHostId` call in `run()`, so the settings fallback lands in a single place.",
+  "verification": [
+    {
+      "command": "node /tmp/vi-label/check.mjs",
+      "exitCode": 0,
+      "stdout": "ok\r\n",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "ea88fa7255d7334686c194b7b55af8be046848a9592fb97304d6caf3580122d3",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 60,
+      "revision": {
+        "head": "b50f3f81f2e80e1fc1b21d68f22cfdc5f25ea1f5",
+        "dirty": 4
+      }
+    },
+    {
+      "command": "node --test tests/cloud-error-label.test.ts tests/cloud-prompt.test.ts",
+      "exitCode": 0,
+      "stdout": "✔ cloud errors name the real provider (23.82875ms)\r\n✔ OpenAI prompt limit is 896 characters (0.597292ms)\r\n✔ a prompt over the limit is clamped to its last characters (22.4245ms)\r\n✔ a 100-character prompt is sent unchanged (0.2ms)\r\nℹ tests 4\r\nℹ suites 0\r\nℹ pass 4\r\nℹ fail 0\r\nℹ cancelled 0\r\nℹ skipped 0\r\nℹ todo 0\r\nℹ duration_ms 143.618542\r\n",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "0030c60d980c7b7c5afe9e78f2f58019f91cc5debb28180e53e87829d47d34c6",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 120,
+      "revision": {
+        "head": "b50f3f81f2e80e1fc1b21d68f22cfdc5f25ea1f5",
+        "dirty": 4
+      }
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0,
+      "stdout": "\\\u001b[1G\u001b[0K\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m New \u001b[31mmajor\u001b[39m version of npm available! \u001b[31m11.16.0\u001b[39m -> \u001b[34m12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m Changelog: \u001b[34mhttps://github.com/npm/cli/releases/tag/v12.2.2\u001b[39m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m To update run: \u001b[4mnpm install -g npm@12.2.2\u001b[24m\r\n\u001b[1mnpm\u001b[22m \u001b[96mnotice\u001b[39m\r\n\\\u001b[1G\u001b[0K",
+      "stderr": "",
+      "sandboxBackend": "macos-seatbelt",
+      "policySha256": "8c369466b9aa632d25448b9123fee5a4d0b3b99087fcb0941dbd27e19ab233e2",
+      "workspacePath": "/Users/vechkasov/.lane-pilot/worktrees/lpattempt_2da2ac5b401f43e4909f19559a29792a/bb-plugin-voice-input",
+      "timeoutSec": 300,
+      "revision": {
+        "head": "b50f3f81f2e80e1fc1b21d68f22cfdc5f25ea1f5",
+        "dirty": 4
+      }
+    }
+  ],
+  "runV2": {
+    "schemaVersion": 1,
+    "pools": {
+      "provider": 15,
+      "verification": 2
+    },
+    "score": 2,
+    "risk": "low",
+    "sourceRisk": "low",
+    "scoreAdapter": "task-risk-v1"
+  },
+  "reasoning": [
+    {
+      "planSha256": "2a69fdc438631f888a337af520d101bf3ef9c82b7c9a5b3003db83666b0ea928",
+      "sentPlanSha256": null,
+      "sourceLength": 1666,
+      "sentLength": null,
+      "jevStatus": "disabled",
+      "jevDecision": null,
+      "requestedReasoningLevel": "high",
+      "effectiveReasoningLevel": "high",
+      "fallbackReason": "jev_disabled;jev_disabled_by_project_setting",
+      "retryEffort": {
+        "enabled": false,
+        "retryIndex": 0,
+        "before": "high",
+        "after": "high",
+        "changed": false
+      },
+      "providerId": "devin",
+      "model": "swe-2-flash-medium",
+      "serviceTier": "fast",
+      "requestedServiceTier": "fast",
+      "runId": "lprun_4c7ba30c82064d408452ba865c6fd345",
+      "attemptId": "lpattempt_3d23674b0d0a4e86a5972af5b0661ec3",
+      "threadId": "thr_dbtsdt9cp4",
+      "effortMode": "manual",
+      "selectionSource": {
+        "providerId": "devin",
+        "model": "swe-2-flash-medium",
+        "reasoningLevel": "high",
+        "serviceTier": "fast",
+        "reasoningLevelSource": "explicit"
+      },
+      "dispatchContext": {
+        "memoryText": "",
+        "memoryPicked": [],
+        "rulesText": "- In a folder without git (live-folder mode), never put a task's expected_outputs or owns_paths under .bb/ (chat folders): the live snapshot skips .bb, so a file written there is never counted as produced and the task blocks as missing expected_outputs. Put task deliverables in a project folder such as docs/ or reports/.\n- Правя тестовый файл из owns_paths, меняй только ожидаемые значения внутри существующих строгих assert (deepEqual/equal) и добавляй новые проверки рядом — не удаляй строки assert и не ослабляй строгую проверку до assert.ok/includes/truthiness; перед ответом перечитай свой diff по тестам и верни всё, что стало слабее: test_fit помечает это как сломанную проверку, и попытки сгорают до лимита.",
+        "rulesPicked": {
+          "total": 33,
+          "picked": [
+            "rule_df3e34f2aef5a993",
+            "rule_af70160574711f7e"
+          ]
+        },
+        "executionPacket": "Read these before editing; they are the context for this task:\n- src/cloud.ts L1-L244 (sha256 477faa9f)\n- host.ts L1-L648 (sha256 3022202c)",
+        "executionPacketSha256": "a2f862246580ce5e1f1ee4830c059108f41d289e503b673224dbb067bbfb9d52",
+        "pmReadContext": "",
+        "agent": "Lane Pilot writer",
+        "promptChars": 7911,
+        "helperMode": "roles",
+        "helperRequired": false,
+        "skillPick": {
+          "enabled": true,
+          "skills": [
+            "voice-input"
+          ],
+          "picked": [],
+          "craft": [],
+          "projectFolder": [
+            "voice-input"
+          ],
+          "hints": [],
+          "sources": {
+            "voice-input": "/Users/vechkasov/.bb/plugins/cache/git/github.com/VKirill/bb-plugin-voice-input/f21294f662f222a6ee497559677317b1045c5930/skills/voice-input"
+          },
+          "reason": null,
+          "materialized": []
+        },
+        "writerKey": "devin/swe-2-flash-medium",
+        "harness": {
+          "id": "hrn_81941aabda432066",
+          "arm": null,
+          "alwaysOnChars": 0,
+          "skills": [],
+          "checks": [],
+          "materialize": null
+        }
+      }
+    }
+  ],
+  "emergencyFallback": null,
+  "turns": 1
+}

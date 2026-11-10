@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "task_id": "provider-label-cli-machine",
+  "task_sha256": "39658528ab319b144324c57efc59dcd49a8c189e28431d7939d1e6ed37605a6f",
+  "attempt": 1,
+  "provider_exit": 0,
+  "report": "complete",
+  "report_sha256": "4753fd337dbfc71a23dd20a5dc22c4080ff7edcd0d566efe88975e8d131b455b",
+  "owns_check": "passed",
+  "verification": "passed",
+  "review": "not_required",
+  "accepted": true,
+  "accepted_at": "2026-11-10T14:47:24.952Z",
+  "model": "swe-2-flash-medium"
+}

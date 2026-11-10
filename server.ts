@@ -630,7 +630,7 @@ export default async function plugin(bb: BbPluginApi) {
           );
         }
 
-        const hostId = await resolveHostId(bb, host, flags.machine);
+        const hostId = await resolveHostId(bb, host, flags.machine ?? ((await readSettings()).machine || undefined));
 
         if (command === "status") {
           const status = await host.call("status", {}, { hostId });
