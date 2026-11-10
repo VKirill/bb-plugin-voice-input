@@ -47,15 +47,16 @@ export function findVoiceButton(target: EventTarget | null): HTMLElement | null 
     return null;
   }
 
-  // Кнопка микрофона ОБЯЗАНА находиться внутри поля ввода (PromptBox)!
-  // Это исключает ложные срабатывания на треды в сайдбаре, ссылки, сообщения агента и т.д.
-  const inPromptBox =
-    button.closest("[data-promptbox]") !== null ||
+  // Кнопка микрофона ОБЯЗАНА находиться в ряду действий поля ввода: там лежат свои кнопки BB.
+  // Это исключает ложные срабатывания на треды в сайдбаре, ссылки, сообщения агента и на значки других
+  // плагинов, которые те вставляют в само поле ввода: у квадратика помощника Lane Pilot в подсказке стоит
+  // название задачи, и слово «voice» или «mic» в нём включало запись (2026-11-10).
+  const inActionRow =
     button.closest("[data-promptbox-action-row]") !== null ||
-    button.closest("form[data-promptbox]") !== null ||
     button.hasAttribute("data-promptbox-voice-trigger") ||
+    button.hasAttribute("data-promptbox-voice-action") ||
     button.hasAttribute("data-voice-recording");
-  if (!inPromptBox) return null;
+  if (!inActionRow) return null;
 
   // 1. Проверка aria-label и title на голосовые ключевые слова
   const aria = (button.getAttribute("aria-label") || "").trim().toLowerCase();

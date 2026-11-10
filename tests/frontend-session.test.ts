@@ -90,8 +90,19 @@ test("findVoiceButton распознаёт кнопки микрофона вн�
     }
   }
 
-  const promptBox = new MockElement("form");
-  promptBox.setAttribute("data-promptbox", "");
+  const promptBoxRoot = new MockElement("form");
+  promptBoxRoot.setAttribute("data-promptbox", "");
+  // Свои кнопки BB (микрофон, отправка) лежат в ряду действий внутри поля ввода
+  const promptBox = new MockElement("div");
+  promptBox.setAttribute("data-promptbox-action-row", "");
+  promptBox.parentElement = promptBoxRoot;
+
+  // Значок чужого плагина на рамке поля ввода (квадратик помощника Lane Pilot): в подсказке название задачи со словом «voice»
+  const helperChip = new MockElement("button");
+  helperChip.setAttribute("title", "Исполнитель: voice-input: cloud errors name the real provider");
+  helperChip.setAttribute("aria-label", "Исполнитель: voice-input: dynamic microphone list. Открыть чат");
+  helperChip.parentElement = promptBoxRoot;
+  assert.equal(findVoiceButton(helperChip as unknown as EventTarget), null);
 
   // Английская кнопка микрофона внутри promptbox
   const enButton = new MockElement("button");
