@@ -8,6 +8,8 @@ export type CloudCredentials = {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Имя сервиса в сообщениях об ошибках: «OpenAI», «Groq». */
+  label?: string;
 };
 
 export type CloudRequest = {
@@ -85,7 +87,7 @@ export async function transcribeOpenAi(
 
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(`OpenAI ответил HTTP ${response.status}: ${errorMessage(payload)}`);
+    throw new Error(`${credentials.label ?? "OpenAI"} ответил HTTP ${response.status}: ${errorMessage(payload)}`);
   }
   const text = readString(payload, "text");
   if (text === null) {

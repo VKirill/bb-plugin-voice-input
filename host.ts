@@ -322,6 +322,7 @@ async function runTranscription(
           baseUrl: groq ? config.cloud.groqBaseUrl : config.cloud.openaiBaseUrl,
           apiKey: key,
           model: groq ? config.cloud.groqModel : config.cloud.openaiModel,
+          label: groq ? "Groq" : "OpenAI",
         },
         request,
       );
