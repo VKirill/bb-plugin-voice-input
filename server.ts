@@ -722,6 +722,36 @@ export default async function plugin(bb: BbPluginApi) {
           );
         }
 
+        // Настройки живут на сервере: машина для них не нужна.
+        if (command === "config") {
+          const [, key, ...rest] = flags.positional;
+          const current = await readSettings();
+          if (!key) {
+            return ok(
+              Object.entries(current)
+                .map(([name, value]) => `${name} = ${JSON.stringify(value)}`)
+                .join("\n"),
+            );
+          }
+          if (!(key in DEFAULT_SETTINGS)) {
+            return { exitCode: 1, stderr: `No setting named "${key}".` };
+          }
+          const raw = rest.join(" ");
+          const typed =
+            typeof DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS] === "boolean"
+              ? raw === "true"
+              : typeof DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS] === "number"
+                ? Number.parseInt(raw, 10)
+                : raw;
+          const patch = sanitizePatch({ [key]: typed });
+          if (Object.keys(patch).length === 0) {
+            return { exitCode: 1, stderr: `Value "${raw}" does not fit "${key}".` };
+          }
+          const next = await writeSettings(patch);
+          await pushConfig();
+          return ok(`${key} = ${JSON.stringify(next[key as keyof StoredSettings])}`);
+        }
+
         const hostId = await resolveHostId(bb, host, flags.machine ?? ((await readSettings()).machine || undefined));
 
         if (command === "status") {
@@ -759,35 +789,6 @@ export default async function plugin(bb: BbPluginApi) {
           );
           await pushConfig();
           return { exitCode: result.ready ? 0 : 1, stdout: [result.log, "", result.detail].join("\n").trim() };
-        }
-
-        if (command === "config") {
-          const [, key, ...rest] = flags.positional;
-          const current = await readSettings();
-          if (!key) {
-            return ok(
-              Object.entries(current)
-                .map(([name, value]) => `${name} = ${JSON.stringify(value)}`)
-                .join("\n"),
-            );
-          }
-          if (!(key in DEFAULT_SETTINGS)) {
-            return { exitCode: 1, stderr: `No setting named "${key}".` };
-          }
-          const raw = rest.join(" ");
-          const typed =
-            typeof DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS] === "boolean"
-              ? raw === "true"
-              : typeof DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS] === "number"
-                ? Number.parseInt(raw, 10)
-                : raw;
-          const patch = sanitizePatch({ [key]: typed });
-          if (Object.keys(patch).length === 0) {
-            return { exitCode: 1, stderr: `Value "${raw}" does not fit "${key}".` };
-          }
-          const next = await writeSettings(patch);
-          await pushConfig();
-          return ok(`${key} = ${JSON.stringify(next[key as keyof StoredSettings])}`);
         }
 
         if (command === "download") {

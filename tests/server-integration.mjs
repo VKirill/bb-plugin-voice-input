@@ -126,3 +126,22 @@ test("cloud engine with a catalog key transcribes on the server while the chosen
     await harness.lifecycle.dispose();
   }
 });
+
+test("CLI config reads and writes settings with no connected machine", async () => {
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "voice-input", dataDir: join(tmpdir(), "voice-config-test"),
+    sdk: { hosts: { list: async () => [] } },
+    experimental_callHostRpc: async () => { throw new Error("Host is not connected"); },
+  });
+  try {
+    await bb.storage.kv.set("settings", { machine: "host_mini" });
+    await plugin(bb);
+    const cli = harness.inspection.registrations.cli;
+    assert.ok(cli?.run, "CLI registered");
+    const set = await cli.run(["config", "groqKeyCatalog", "GROQ_API_KEY"], {});
+    assert.equal(set.exitCode ?? 0, 0, set.stderr);
+    assert.equal((await bb.storage.kv.get("settings")).groqKeyCatalog, "GROQ_API_KEY");
+  } finally {
+    await harness.lifecycle.dispose();
+  }
+});
