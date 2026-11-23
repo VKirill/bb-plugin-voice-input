@@ -11,6 +11,16 @@ import { join } from "node:path";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { registerCompatibleAiService } from "./src/ai-service-compat.js";
+import { resolveAiPassKey } from "./src/key-resolution.js";
+import {
+  cloudKey,
+  cloudKeyEnv,
+  finishTranscript,
+  isCloudEngine,
+  postprocess,
+  recognitionHint,
+  transcribeCloud,
+} from "./src/pipeline.js";
 import {
   AI_SERVICE_ID,
   ENGINE_IDS,
@@ -29,6 +39,17 @@ import {
 } from "./src/settings-store.js";
 
 const CONFIG_PUSH_DELAY_MS = 2_000;
+/** Расширение файла для облачной службы: по нему она узнаёт формат записи. */
+const CLOUD_EXTENSIONS: Record<string, string> = {
+  "audio/webm": ".webm",
+  "audio/ogg": ".ogg",
+  "audio/mpeg": ".mp3",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/flac": ".flac",
+};
 /** Установка тянет пакеты и модель: полчаса — потолок, а не ожидание. */
 const SETUP_TIMEOUT_MS = 30 * 60 * 1000;
 /** Длинная запись плюс возможная первая загрузка модели. */
@@ -315,6 +336,32 @@ export default async function plugin(bb: BbPluginApi) {
   }
 
   /**
+   * Конфиг с ключами, которые сервер знает сам: привязанными к Env Catalog.
+   * Введённые вручную ключи живут только на машине распознавания.
+   */
+  async function serverConfig(uiLanguage?: UiLanguage): Promise<VoiceConfig> {
+    const config = await currentConfig();
+    const values = await readSettings();
+    const linked = async (slot: (typeof KEY_SLOTS)[number]) => {
+      const name = values[slot.catalog];
+      if (!name) return "";
+      try {
+        return await catalogValue(name);
+      } catch (error) {
+        bb.log.warn(`Key ${slot.secret} not taken from Env Catalog — ${describe(error)}`);
+        return "";
+      }
+    };
+    const [aiPassApiKey, openaiApiKey, googleApiKey, groqApiKey] = await Promise.all(KEY_SLOTS.map(linked));
+    return {
+      ...config,
+      ...(uiLanguage === undefined ? {} : { uiLanguage }),
+      cloud: { ...config.cloud, openaiApiKey: openaiApiKey!, googleApiKey: googleApiKey!, groqApiKey: groqApiKey! },
+      aiPass: { ...config.aiPass, apiKey: aiPassApiKey! },
+    };
+  }
+
+  /**
    * Доставить на машину распознавания ключи, привязанные к каталогу. Так
    * замена ключа в каталоге доходит до плагина при старте и при сохранении
    * настроек, а не только в момент выбора.
@@ -526,6 +573,11 @@ export default async function plugin(bb: BbPluginApi) {
     },
     improveText: async (input) => {
       try {
+        // ИИ-проход — облачный вызов: при ключе на сервере машина не нужна.
+        const config = await serverConfig(input.uiLanguage);
+        if (resolveAiPassKey(config).key) {
+          return { ok: true, text: await postprocess(input.text, config, () => {}, true), error: null };
+        }
         const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
         return await host.call("improveText", input, { hostId, timeoutMs: 40_000 });
       } catch (error) {
@@ -541,6 +593,11 @@ export default async function plugin(bb: BbPluginApi) {
     prompt?: string | null;
     uiLanguage?: UiLanguage;
   }) {
+    const config = await serverConfig(input.uiLanguage);
+    if (isCloudEngine(config.engine) && !cloudKeyEnv(config, config.engine)) {
+      const key = cloudKey(config, config.engine);
+      if (key) return await transcribeOnServer({ ...config, engine: config.engine }, key, input);
+    }
     const hostId = await resolveHostId(bb, host, (await readSettings()).machine || undefined);
     return await host.call(
       "transcribeDirect",
@@ -554,6 +611,41 @@ export default async function plugin(bb: BbPluginApi) {
       },
       { hostId, timeoutMs: TRANSCRIBE_TIMEOUT_MS },
     );
+  }
+
+  /**
+   * Облачное распознавание прямо на сервере BB: запись уходит в облако отсюда,
+   * поэтому диктовка работает, даже когда выбранная машина выключена. История
+   * и копии записей ведутся только на машине распознавания.
+   */
+  async function transcribeOnServer(
+    config: VoiceConfig & { engine: "openai" | "google" | "groq" },
+    key: string,
+    input: { audioBase64: string; mimeType: string; filename?: string },
+  ): Promise<{ ok: boolean; text: string; rawText?: string; error: string | null }> {
+    const mimeType = input.mimeType.split(";")[0]?.trim() || "application/octet-stream";
+    const filename =
+      input.filename && /.[a-z0-9]{2,5}$/iu.test(input.filename)
+        ? input.filename
+        : `recording${CLOUD_EXTENSIONS[mimeType] ?? ".webm"}`;
+    const hint = recognitionHint(config);
+    try {
+      const rawText = await transcribeCloud(config, key, {
+        audio: Buffer.from(input.audioBase64, "base64"),
+        filename,
+        mimeType,
+        prompt: hint,
+        timeoutMs: TRANSCRIBE_TIMEOUT_MS,
+      });
+      return { ok: true, text: await finishTranscript(rawText, hint, config), rawText, error: null };
+    } catch (error) {
+      const message = describe(error);
+      return {
+        ok: false,
+        text: "",
+        error: message === "timeout" ? dictionary(config.uiLanguage).system.transcribeTimeout : message,
+      };
+    }
   }
 
   registerCompatibleAiService(

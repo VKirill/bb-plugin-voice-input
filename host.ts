@@ -22,12 +22,15 @@ import { readSecrets, writeSecret } from "./src/secret-store.js";
 import { resolveAiPassKey, resolveProviderKey } from "./src/key-resolution.js";
 import { callDaemon, ensureDaemon, materializePython, stopDaemon } from "./src/daemon.js";
 import { engineReady, findFfmpeg, findPython, setupEngine } from "./src/setup.js";
-import { buildRecognitionPrompt, parseVocabulary } from "./src/vocabulary.js";
-import { cleanupText } from "./src/cleanup.js";
-import { repairTerms } from "./src/term-repair.js";
-import { runAiPass } from "./src/ai-pass.js";
-import { guardAiPass } from "./src/ai-pass-guard.js";
-import { transcribeGemini, transcribeOpenAi } from "./src/cloud.js";
+import {
+  cloudKey,
+  cloudKeyEnv,
+  finishTranscript,
+  isCloudEngine,
+  postprocess,
+  recognitionHint,
+  transcribeCloud,
+} from "./src/pipeline.js";
 import { dictionary } from "./src/i18n/index.js";
 
 const DEFAULT_CONFIG: VoiceConfig = {
@@ -60,9 +63,6 @@ const DEFAULT_CONFIG: VoiceConfig = {
   keepDays: 14,
 };
 
-/** Подсказка Whisper читается моделью лишь частично — держим бюджет Voica. */
-const PROMPT_BUDGET_CHARS = 800;
-const AI_PASS_TIMEOUT_MS = 30_000;
 /**
  * Через сколько секунд тишины демон выгружает модель и выходит. Модель весит
  * гигабайты и на машине сервера соседствует с тредами — тёплый старт того не
@@ -192,55 +192,6 @@ async function pruneRecordings(paths: HostPaths, keepDays: number): Promise<void
   }
 }
 
-/** Правила словаря, очистка и — если включён — проход модели. */
-async function postprocess(
-  rawText: string,
-  config: VoiceConfig,
-  log: (message: string) => void,
-  requireAiPass = false,
-): Promise<string> {
-  const aiPassKey = resolveAiPassKey(config).key;
-  if (requireAiPass && (!config.aiPass.enabled || !config.aiPass.model.trim() || !aiPassKey.trim())) {
-    throw new Error(dictionary(config.uiLanguage).improvement.configure);
-  }
-  const entries = parseVocabulary(config.vocabulary);
-  let text = rawText;
-
-  // Искажения ищутся сравнением по согласному костяку: непохожее не трогается.
-  if (config.vocabularyRepair && entries.length > 0) {
-    text = repairTerms(text, entries);
-  }
-  text = cleanupText(text, {
-    fillers: config.cleanupFillers,
-    quotes: config.cleanupQuotes,
-    language: config.language,
-  });
-
-  if (config.aiPass.enabled && (config.aiPass.trigger === "automatic" || requireAiPass) && config.aiPass.model && aiPassKey) {
-    try {
-      const intent = config.aiPass.mode === "intent";
-      // Для контекстной редактуры сохраняем исходные слова, до эвристических замен.
-      const corrected = await runAiPass(intent ? rawText : text, {
-        baseUrl: config.aiPass.baseUrl,
-        model: config.aiPass.model,
-        apiKey: aiPassKey,
-        vocabulary: entries,
-        timeoutMs: AI_PASS_TIMEOUT_MS,
-        mode: config.aiPass.mode,
-        prompt: config.aiPass.prompt,
-        uiLanguage: config.uiLanguage,
-      });
-      // Пословная защита нужна только строгому режиму: иначе она отменяет редактуру.
-      text = intent ? corrected : guardAiPass(text, corrected, entries);
-    } catch (error) {
-      if (requireAiPass) throw error;
-      // Текст после правил уже пригоден — сбой прохода не должен его отменять.
-      log(`ИИ-проход пропущен: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  return text;
-}
-
 async function appendHistory(
   paths: HostPaths,
   record: {
@@ -282,68 +233,22 @@ async function runTranscription(
 ): Promise<TranscriptionOutcome> {
   const started = Date.now();
   let rawText: string;
-  const words = dictionary(config.uiLanguage).errors;
+  const hint = recognitionHint(config);
 
-  const entries = parseVocabulary(config.vocabulary);
-  const hint = config.vocabularyPrompt
-    ? buildRecognitionPrompt(entries, PROMPT_BUDGET_CHARS)
-    : null;
-
-  if (
-    config.engine === "openai" ||
-    config.engine === "google" ||
-    config.engine === "groq"
-  ) {
+  if (isCloudEngine(config.engine)) {
     // Облачные движки читают файл с диска и отправляют его наружу.
-    const audio = await readFile(args.audioPath);
-    const request = {
-      audio,
-      filename: basename(args.audioPath),
-      mimeType: mimeTypeFor(args.audioPath),
-      language: config.language,
-      prompt: hint,
-      timeoutMs: args.timeoutMs,
-    };
-    if (config.engine === "openai" || config.engine === "groq") {
-      const groq = config.engine === "groq";
-      const key = groq
-        ? resolveKey(resolveProviderKey(config, "groq").key, config.cloud.groqKeyEnv)
-        : resolveKey(resolveProviderKey(config, "openai").key, config.cloud.openaiKeyEnv);
-      const keyEnv = groq ? config.cloud.groqKeyEnv : config.cloud.openaiKeyEnv;
-      if (!key) {
-        throw new Error(
-          keyEnv
-            ? words.keyEnvMissing(keyEnv)
-            : words.keyRequired(groq ? "Groq" : "OpenAI"),
-        );
-      }
-      rawText = await transcribeOpenAi(
-        {
-          baseUrl: groq ? config.cloud.groqBaseUrl : config.cloud.openaiBaseUrl,
-          apiKey: key,
-          model: groq ? config.cloud.groqModel : config.cloud.openaiModel,
-          label: groq ? "Groq" : "OpenAI",
-        },
-        request,
-      );
-    } else {
-      const key = resolveKey(resolveProviderKey(config, "google").key, config.cloud.googleKeyEnv);
-      if (!key) {
-        throw new Error(
-          config.cloud.googleKeyEnv
-            ? words.keyEnvMissing(config.cloud.googleKeyEnv)
-            : words.keyRequired("Google"),
-        );
-      }
-      rawText = await transcribeGemini(
-        {
-          baseUrl: config.cloud.googleBaseUrl,
-          apiKey: key,
-          model: config.cloud.googleModel,
-        },
-        request,
-      );
-    }
+    const engine = config.engine;
+    rawText = await transcribeCloud(
+      { ...config, engine },
+      resolveKey(cloudKey(config, engine), cloudKeyEnv(config, engine)),
+      {
+        audio: await readFile(args.audioPath),
+        filename: basename(args.audioPath),
+        mimeType: mimeTypeFor(args.audioPath),
+        prompt: hint,
+        timeoutMs: args.timeoutMs,
+      },
+    );
   } else {
     await ensureDaemon(paths, config.engine, DAEMON_IDLE_SECONDS, config.uiLanguage);
     const response = await callDaemon(
@@ -365,20 +270,7 @@ async function runTranscription(
     rawText = response.text ?? "";
   }
 
-  // Защита от галлюцинаций Whisper при тишине на записи:
-  // если модель просто повторила подсказку словаря
-  if (hint && rawText.trim().length > 0) {
-    const normRaw = rawText.replace(/[,.\s]/g, "").toLowerCase();
-    const normHint = hint.replace(/[,.\s]/g, "").toLowerCase();
-    if (normRaw === normHint) {
-      rawText = "";
-    }
-  }
-
-  const text = await postprocess(rawText, config, () => {});
-  if (!text.trim()) {
-    throw new Error(dictionary(config.uiLanguage).system.noSpeech);
-  }
+  const text = await finishTranscript(rawText, hint, config);
   const outcome: TranscriptionOutcome = {
     engine: config.engine,
     durationMs: Date.now() - started,

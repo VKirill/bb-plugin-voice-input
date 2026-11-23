@@ -112,6 +112,14 @@ TL;DR: The sharp edges are differences between browser and host timeouts, settin
 
 **Workaround:** Keep the SDK compatibility adapter when changing service registration (`server.ts:534-558`).
 
+### Cloud dictation without the recognition machine
+
+**Problem:** Keys typed into the settings and keys read from an environment variable live on the recognition machine (`src/secret-store.ts`, `resolveKey` in `host.ts`).
+
+**Risk:** With such a key, cloud dictation stops when that machine is offline.
+
+**Workaround:** Link the engine key (and the AI-pass key) to Env Catalog. The server then reads it itself and runs cloud recognition and the AI pass on the BB server (`transcribeOnServer` and `serverConfig` in `server.ts`, shared code in `src/pipeline.ts`). Server-side runs keep no history or recordings.
+
 <!-- lane-pilot:backlinks -->
 ## Referenced by
 

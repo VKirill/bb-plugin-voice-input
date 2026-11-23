@@ -80,3 +80,49 @@ test("Improve rejects invalid input before host dispatch", async () => {
     assert.equal(calls.filter((item) => item.method === "improveText").length, 0);
   });
 });
+
+test("cloud engine with a catalog key transcribes on the server while the chosen machine is offline", async () => {
+  const hostCalls = [];
+  const requests = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), auth: init.headers.authorization, file: init.body.get("file") });
+    return new Response(JSON.stringify({ text: "привет из облака" }), { status: 200 });
+  };
+  const { bb, harness } = createFakePluginHost({
+    pluginId: "voice-input", dataDir: join(tmpdir(), "voice-cloud-test"),
+    sdk: {
+      hosts: { list: async () => [makeHostResponse({ id: "host_mini", name: "MAC Mini", status: "disconnected" })] },
+      plugins: {
+        callRpc: async ({ pluginId, method, input }) => {
+          assert.equal(pluginId, "env-catalog");
+          assert.equal(method, "env_get_value");
+          assert.equal(input.name, "GROQ_API_KEY");
+          return { value: "gsk_test" };
+        },
+      },
+    },
+    experimental_callHostRpc: async (call) => {
+      hostCalls.push(call.method);
+      throw new Error("Host is not connected");
+    },
+  });
+  try {
+    await bb.storage.kv.set("settings", { engine: "groq", machine: "host_mini", groqKeyCatalog: "GROQ_API_KEY" });
+    await plugin(bb);
+    const result = await harness.behavior.callRpc("transcribeAudio", {
+      audioBase64: Buffer.from("cloud audio").toString("base64"),
+      mimeType: "audio/webm;codecs=opus",
+    });
+    assert.deepEqual(result, { ok: true, text: "привет из облака", rawText: "привет из облака", error: null });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, "https://api.groq.com/openai/v1/audio/transcriptions");
+    assert.equal(requests[0].auth, "Bearer gsk_test");
+    assert.equal(requests[0].file.name, "recording.webm");
+    assert.equal(requests[0].file.type, "audio/webm");
+    assert.equal(hostCalls.filter((method) => method === "transcribeDirect").length, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+    await harness.lifecycle.dispose();
+  }
+});
