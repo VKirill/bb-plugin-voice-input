@@ -31,6 +31,8 @@ export const pt: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Mostrar confirmação do ditado",
+    showDictationErrors: "Mostrar erros do ditado",
     fillers: "Remover hesitações",
     fillersHint: "Uma palavra real alongada é endireitada em vez de apagada.",
     quotes: "Ajustar aspas e espaços",

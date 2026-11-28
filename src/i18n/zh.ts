@@ -31,6 +31,8 @@ export const zh: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "显示听写成功提示",
+    showDictationErrors: "显示听写错误",
     fillers: "去掉口头语",
     fillersHint: "被拖长的真实词语会被还原，而不是删除。",
     quotes: "整理引号与空格",

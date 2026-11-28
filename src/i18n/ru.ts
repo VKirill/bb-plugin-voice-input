@@ -31,6 +31,8 @@ export const ru: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Показывать подтверждение после диктовки",
+    showDictationErrors: "Показывать ошибки диктовки",
     fillers: "Убирать слова-паразиты",
     fillersHint: "Растянутое настоящее слово не удаляется, а распрямляется: «ну-у-у» → «ну».",
     quotes: "Чинить кавычки и пробелы",

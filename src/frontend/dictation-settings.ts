@@ -2,10 +2,14 @@ export type DictationSettings = {
   aiPassEnabled: boolean;
   aiPassTrigger: "automatic" | "manual";
   aiPassMode: "terms" | "intent";
+  showDictationConfirmation: boolean;
+  showDictationErrors: boolean;
 };
 
 const DEFAULTS: DictationSettings = {
   aiPassEnabled: false, aiPassTrigger: "automatic", aiPassMode: "terms",
+  showDictationConfirmation: true,
+  showDictationErrors: true,
 };
 let snapshot = { ...DEFAULTS, ready: false };
 let revision = 0;
@@ -32,6 +36,8 @@ export function publishDictationSettings(settings: Record<string, unknown>) {
     aiPassEnabled: settings.aiPassEnabled === true,
     aiPassTrigger: settings.aiPassTrigger === "manual" ? "manual" : "automatic",
     aiPassMode: settings.aiPassMode === "intent" ? "intent" : "terms",
+    showDictationConfirmation: settings.showDictationConfirmation !== false,
+    showDictationErrors: settings.showDictationErrors !== false,
     ready: true,
   } as const;
   if (editorChanged || next.aiPassEnabled !== snapshot.aiPassEnabled

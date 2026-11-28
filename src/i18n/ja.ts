@@ -31,6 +31,8 @@ export const ja: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "音声入力の完了通知を表示",
+    showDictationErrors: "音声入力のエラーを表示",
     fillers: "「えー」「あのー」を取り除く",
     fillersHint: "引き伸ばされた本来の語は削らず、元の形に戻します。",
     quotes: "引用符と空白を整える",

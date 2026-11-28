@@ -31,6 +31,8 @@ export const en: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Show dictation confirmation",
+    showDictationErrors: "Show dictation errors",
     fillers: "Remove “uh”, “um”, “hmm”",
     fillersHint: "A stretched real word is straightened instead of dropped.",
     quotes: "Fix quotes and spacing",

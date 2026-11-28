@@ -31,6 +31,8 @@ export const fr: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Afficher la confirmation de dictée",
+    showDictationErrors: "Afficher les erreurs de dictée",
     fillers: "Supprimer les hésitations",
     fillersHint: "Un vrai mot étiré est remis droit au lieu d’être supprimé.",
     quotes: "Corriger guillemets et espaces",

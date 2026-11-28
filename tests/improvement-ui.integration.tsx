@@ -11,6 +11,7 @@ const dom = new JSDOM("<!doctype html><html lang='en'><body></body></html>", { u
 for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement", "MutationObserver", "Node", "NodeFilter", "Event", "CustomEvent", "StorageEvent", "PopStateEvent"]) {
   Object.defineProperty(globalThis, name, { value: (dom.window as any)[name], configurable: true });
 }
+Object.defineProperty(globalThis, "getComputedStyle", { value: dom.window.getComputedStyle.bind(dom.window), configurable: true });
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", { value: true, writable: true });
 const React = await import("react");
 const { act, fireEvent, cleanup, waitFor } = await import("@testing-library/react");
@@ -210,6 +211,47 @@ test("app registers the native composer action and banner", async () => {
   assert.equal(customization?.actions?.[0]?.id, "improve-dictation");
   assert.equal(customization?.banners?.[0]?.id, "improvement-result");
   assert.deepEqual(app.contentScripts.map((item) => item.id), ["voice-input-lifecycle"]);
+});
+
+test("the Dictation tab saves confirmation and error preferences independently", async (t) => {
+  t.after(() => { cleanup(); resetDictationSettings(); });
+  const app = await loadPluginApp(() => import("../app.tsx"));
+  const section = app.settingsSections.find((item) => item.id === "voice-input");
+  assert.ok(section);
+  const settings = { showDictationConfirmation: true, showDictationErrors: true };
+  const patches: unknown[] = [];
+  const slot = renderSlot(section, {}, {
+    pluginId: "voice-input",
+    rpc: {
+      state: () => ({
+        machine: null, machineId: null, machines: [], error: null,
+        pythonPath: null, ffmpegPath: null, recordings: 0, engines: [],
+        activeEngine: "whisper", settings, whisperModelOptions: [],
+        aiPassConfigured: false, aiPassKeySource: null, openaiConfigured: false,
+        googleConfigured: false, groqConfigured: false, progress: null,
+      }),
+      diskModels: () => ({ models: [] }),
+      catalogKeys: () => ({ available: false, names: [] }),
+      updateSettings: (patch) => {
+        patches.push(patch);
+        Object.assign(settings, patch);
+        return { saved: true };
+      },
+    },
+  });
+  const dictationTab = await slot.findByRole("button", { name: "Dictation" });
+  fireEvent.click(dictationTab);
+  const confirmation = slot.getByRole("checkbox", { name: "Show dictation confirmation" });
+  const errors = slot.getByRole("checkbox", { name: "Show dictation errors" });
+  assert.equal(confirmation.getAttribute("aria-checked"), "true");
+  assert.equal(errors.getAttribute("aria-checked"), "true");
+
+  await act(async () => fireEvent.click(confirmation));
+  assert.equal(confirmation.getAttribute("aria-checked"), "false");
+  assert.equal(errors.getAttribute("aria-checked"), "true");
+  await act(async () => fireEvent.click(errors));
+  assert.equal(errors.getAttribute("aria-checked"), "false");
+  assert.deepEqual(patches, [{ showDictationConfirmation: false }, { showDictationErrors: false }]);
 });
 
 for (const edit of ["", "мой текст", "фаст", "фаст апи и ещё текст"]) {

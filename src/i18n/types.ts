@@ -58,6 +58,8 @@ export type Dictionary = {
     hotkeyPresetWinCapsLock: string;
     autoSend: string;
     autoSendHint: string;
+    showDictationConfirmation: string;
+    showDictationErrors: string;
     silenceStop: string;
     silenceStopHint: string;
     silenceStopOff: string;

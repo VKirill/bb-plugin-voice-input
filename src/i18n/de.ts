@@ -31,6 +31,8 @@ export const de: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Diktatbestätigung anzeigen",
+    showDictationErrors: "Diktatfehler anzeigen",
     fillers: "Füllwörter entfernen",
     fillersHint: "Ein gedehntes echtes Wort wird geglättet statt gelöscht.",
     quotes: "Anführungszeichen und Abstände korrigieren",

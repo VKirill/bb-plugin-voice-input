@@ -71,6 +71,8 @@ export const storedSettingsSchema = z
     hotkeyWinMeta: z.boolean(),
     autoSend: z.boolean(),
     silenceStopSeconds: z.number().min(0).max(10),
+    showDictationConfirmation: z.boolean(),
+    showDictationErrors: z.boolean(),
   })
   .strict();
 
@@ -123,6 +125,8 @@ export const DEFAULT_SETTINGS: StoredSettings = {
     hotkeyWinMeta: false,
     autoSend: false,
     silenceStopSeconds: 0,
+    showDictationConfirmation: true,
+    showDictationErrors: true,
   };
 
 /**
