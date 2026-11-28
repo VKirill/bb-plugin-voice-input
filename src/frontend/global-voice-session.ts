@@ -316,7 +316,7 @@ export class GlobalVoiceSession {
       recorder.onerror = () => {
         if (generation !== this.recordingGeneration || this.mediaRecorder !== recorder) return;
         const msg = words().voice.micError;
-        toast.error(msg);
+        this.notifyError(msg);
         this.cleanupAudio();
         this.updateSnapshot({ state: "idle", error: msg });
       };
@@ -387,7 +387,7 @@ export class GlobalVoiceSession {
         errorMsg = err instanceof Error ? err.message : String(err);
       }
       this.updateSnapshot({ state: "idle", error: errorMsg });
-      toast.error(errorMsg);
+      this.notifyError(errorMsg);
       return false;
     }
   }
@@ -435,7 +435,7 @@ export class GlobalVoiceSession {
 
     if (duration < 500 || this.recordedChunks.length === 0) {
       this.updateSnapshot({ state: "idle", target: null });
-      toast.error(words().voice.tooShort);
+      this.notifyError(words().voice.tooShort);
       return;
     }
 
@@ -504,7 +504,7 @@ export class GlobalVoiceSession {
       this.updateSnapshot({ state: "idle", target: null });
 
       if (!isOk || !text) {
-        toast.error(errorMessage || words().voice.notRecognized);
+        this.notifyError(errorMessage || words().voice.notRecognized);
         return;
       }
 
@@ -521,8 +521,16 @@ export class GlobalVoiceSession {
           : err instanceof Error
             ? err.message
             : String(err);
-      toast.error(msg);
+      this.notifyError(msg);
     }
+  }
+
+  private notifyConfirmation(message: string) {
+    if (getDictationSettings().showDictationConfirmation) toast.success(message);
+  }
+
+  private notifyError(message: string) {
+    if (getDictationSettings().showDictationErrors) toast.error(message);
   }
 
   private persistDraftText(target: VoiceTarget, nextText: string) {
@@ -594,13 +602,13 @@ export class GlobalVoiceSession {
             (settings.aiPassTrigger === "manual" || settings.aiPassMode === "intent"));
         } });
       if (isCurrent()) {
-        if (delivered) toast.success(words().voice.pasted);
-        else toast.error(words().voice.destinationChanged);
+        if (delivered) this.notifyConfirmation(words().voice.pasted);
+        else this.notifyError(words().voice.destinationChanged);
       }
       return;
     }
     if (target.kind === "new-thread" && target.originPath && currentComposerRoute() !== target.originPath) {
-      toast.error(words().voice.destinationChanged);
+      this.notifyError(words().voice.destinationChanged);
       return;
     }
 
@@ -612,11 +620,11 @@ export class GlobalVoiceSession {
       const offset = targetEditor ? resolveComposerInsertOffset(getComposerPlainText(targetEditor).length) : null;
       const insertion = manualImprovement.insertDictation(scope, text, rawText, offset);
       if (insertion === "blocked") {
-        toast.error(words().improvement.mentions);
+        this.notifyError(words().improvement.mentions);
         return;
       }
       if (insertion) {
-        toast.success(words().voice.pasted);
+        this.notifyConfirmation(words().voice.pasted);
         return;
       }
       this.deliverManualTranscript(text, rawText, target);
@@ -639,7 +647,7 @@ export class GlobalVoiceSession {
       this.persistDraftInsert(target, text, offset);
 
       const targetName = target.threadTitle || words().voice.originChat;
-      toast.success(words().voice.movedToChat(targetName));
+      this.notifyConfirmation(words().voice.movedToChat(targetName));
 
       if (target.originPath) {
         window.history.pushState(null, "", target.originPath);
@@ -673,7 +681,7 @@ export class GlobalVoiceSession {
       } else {
         this.persistDraftInsert(target, text, offset);
       }
-      toast.success(words().voice.pasted);
+      this.notifyConfirmation(words().voice.pasted);
     }
   }
 
@@ -689,7 +697,7 @@ export class GlobalVoiceSession {
       insertTranscriptAtCaret(editor, text, planned.offset);
       this.persistDraftText(target, planned.text);
       this.rememberManualTranscript(target, text, rawText, planned.text, planned.offset, planned.piece);
-      toast.success(words().voice.pasted);
+      this.notifyConfirmation(words().voice.pasted);
       return;
     }
     const key = getDraftStorageKeys(target)[0];
@@ -710,7 +718,7 @@ export class GlobalVoiceSession {
     }
     // The composer observer adopts only this exact persisted draft on mount;
     // no delayed insertion into whichever editor happens to be visible.
-    toast.success(words().voice.pasted);
+    this.notifyConfirmation(words().voice.pasted);
   }
 
   private rememberManualTranscript(target: VoiceTarget, text: string, rawText: string, draft: string, offset: number, piece: string) {

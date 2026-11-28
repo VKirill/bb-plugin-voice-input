@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
+import { toast } from "sonner";
+import { publishDictationSettings, resetDictationSettings } from "../src/frontend/dictation-settings.ts";
 import { GlobalVoiceSession, type TranscribeFunction } from "../src/frontend/global-voice-session.ts";
 
 function deferred<T>() {
@@ -46,12 +48,18 @@ function browser(t: TestContext, getUserMedia: () => Promise<ReturnType<typeof s
       });
     }
   }
+  const storage = new Map<string, string>();
   const globals: Record<string, unknown> = {
     MediaRecorder: Recorder,
     FileReader: Reader,
     navigator: { mediaDevices: { getUserMedia } },
-    window: { setInterval: () => 1, clearInterval() {} },
-    document: { visibilityState: "hidden", documentElement: { lang: "en" } },
+    window: {
+      setInterval: () => 1,
+      clearInterval() {},
+      location: { pathname: "/" },
+      localStorage: { getItem: storage.get.bind(storage), setItem: storage.set.bind(storage) },
+    },
+    document: { visibilityState: "hidden", documentElement: { lang: "en" }, querySelector: () => null },
   };
   const session = new GlobalVoiceSession();
   t.after(() => session.cancelRecording());
@@ -69,8 +77,40 @@ function browser(t: TestContext, getUserMedia: () => Promise<ReturnType<typeof s
     payloads.push(input);
     return { ok: false, text: "", error: null };
   });
-  return { session, recorders, payloads, advance: () => { now += 1_000; } };
+  return { session, recorders, payloads, storage, advance: () => { now += 1_000; } };
 }
+
+test("dictation notification preferences are independent of each other and of draft delivery", async (t) => {
+  const cases = [
+    { settings: {}, success: 1, error: 1 },
+    { settings: { showDictationConfirmation: false }, success: 0, error: 1 },
+    { settings: { showDictationErrors: false }, success: 1, error: 0 },
+    { settings: { showDictationConfirmation: false, showDictationErrors: false }, success: 0, error: 0 },
+  ];
+  for (const { settings, success, error } of cases) {
+    await t.test(JSON.stringify(settings), async (t) => {
+      const { session, storage, advance } = browser(t);
+      t.after(resetDictationSettings);
+      publishDictationSettings(settings);
+      const confirmations = t.mock.method(toast, "success", () => {});
+      const errors = t.mock.method(toast, "error", () => {});
+
+      assert.equal(await session.startRecording({ kind: "new-thread" }), true);
+      advance();
+      await session.stopAndTranscribe(async () => ({ ok: true, text: "Проверка TypeScript", error: null }));
+      const draftKey = "bb.promptbox.contents-draft-3";
+      assert.equal(JSON.parse(storage.get(draftKey)!).text, "Проверка TypeScript");
+
+      assert.equal(await session.startRecording({ kind: "new-thread" }), true);
+      advance();
+      await session.stopAndTranscribe(async () => ({ ok: false, text: "", error: "Recognition failed" }));
+      assert.equal(JSON.parse(storage.get(draftKey)!).text, "Проверка TypeScript");
+      assert.equal(session.getSnapshot().state, "idle");
+      assert.equal(confirmations.mock.callCount(), success);
+      assert.equal(errors.mock.callCount(), error);
+    });
+  }
+});
 
 test("cancel stops the recorder and microphone tracks", async (t) => {
   const audio = stream();

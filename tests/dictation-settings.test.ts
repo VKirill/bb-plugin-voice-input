@@ -17,6 +17,7 @@ test("legacy confirmed settings keep automatic editing", () => {
   publishDictationSettings({ aiPassEnabled: true });
   assert.deepEqual(getDictationSettings(), {
     aiPassEnabled: true, aiPassTrigger: "automatic", aiPassMode: "terms", ready: true,
+    showDictationConfirmation: true, showDictationErrors: true,
   });
   assert.equal(manualEditingEnabled(), false);
 });

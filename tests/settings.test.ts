@@ -33,6 +33,21 @@ test("правка из браузера отбрасывает чужие кл�
   assert.deepEqual(patch, { vocabulary: "BB", keepDays: 7 });
 });
 
+test("dictation notifications default on and persist explicit off values independently", () => {
+  const legacy = mergeSettings({ vocabulary: "BB" });
+  assert.equal(legacy.showDictationConfirmation, true);
+  assert.equal(legacy.showDictationErrors, true);
+
+  for (const key of ["showDictationConfirmation", "showDictationErrors"] as const) {
+    assert.deepEqual(sanitizePatch({ [key]: "false" }), {});
+    const patch = sanitizePatch({ [key]: false });
+    assert.deepEqual(patch, { [key]: false });
+    const saved = mergeSettings({ ...legacy, ...patch });
+    assert.equal(saved[key], false);
+    assert.equal(saved.vocabulary, "BB");
+  }
+});
+
 test("клавиша диктовки сохраняется отдельно от остальных полей", () => {
   const merged = mergeSettings({
     ...DEFAULT_SETTINGS,

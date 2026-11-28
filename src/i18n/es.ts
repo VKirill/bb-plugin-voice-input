@@ -31,6 +31,8 @@ export const es: Dictionary = {
   },
 
   dictation: {
+    showDictationConfirmation: "Mostrar confirmación del dictado",
+    showDictationErrors: "Mostrar errores del dictado",
     fillers: "Quitar muletillas",
     fillersHint: "Una palabra real alargada no se borra, se endereza.",
     quotes: "Arreglar comillas y espacios",

@@ -787,6 +787,16 @@ function VoiceInputSettings() {
             />
           </Row>
           <Toggle
+            label={t.dictation.showDictationConfirmation}
+            checked={values.showDictationConfirmation !== false}
+            onChange={(next) => void save({ showDictationConfirmation: next })}
+          />
+          <Toggle
+            label={t.dictation.showDictationErrors}
+            checked={values.showDictationErrors !== false}
+            onChange={(next) => void save({ showDictationErrors: next })}
+          />
+          <Toggle
             label={t.dictation.fillers}
             hint={t.dictation.fillersHint}
             checked={values.cleanupFillers === true}
